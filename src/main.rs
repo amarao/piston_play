@@ -3,7 +3,6 @@ extern crate image as im;
 use piston_window::*;
 use piston::event_loop::Events;
 use rand::Rng;
-use std::time;
 use std::thread;
 use std::time::Duration;
 use std::sync::mpsc;
@@ -36,7 +35,6 @@ fn main() {
                 &TextureSettings::new()
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
-    let mut rng = rand::thread_rng();
     let (tx,rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
     thread::spawn(move ||{
             calc(tx,x,y)
@@ -58,14 +56,11 @@ fn main() {
 
 fn calc(tx: SyncSender<DrawCommand>, max_x:u32, max_y:u32){
     let mut rng = rand::thread_rng();
-    let mut c = 0;
     loop{
         let x = rng.gen_range(0,max_x);
         let y = rng.gen_range(0,max_y);
         let color = im::Rgba([rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)]);
-        tx.send(DrawCommand{x, y, color});
+        if let Err(_)  = tx.send(DrawCommand{x, y, color}) {break}
         thread::sleep(Duration::from_millis(1));
-        // println!("pixel {}!", c);
-        c+=1;
     }
 }
