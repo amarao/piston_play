@@ -1,9 +1,19 @@
 extern crate piston_window;
 extern crate image as im;
-
 use piston_window::*;
 use piston::event_loop::Events;
 use rand::Rng;
+use std::time;
+use std::thread;
+use std::time::Duration;
+use std::sync::mpsc;
+use std::sync::mpsc::{SyncSender, Receiver};
+
+struct DrawCommand {
+    x: u32,
+    y: u32,
+    color: im::Rgba<u8>
+}
 
 fn main() {
     let x = 1920;
@@ -27,17 +37,34 @@ fn main() {
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
     let mut rng = rand::thread_rng();
+    let (tx,rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
+    thread::spawn(move ||{
+            calc(tx,x,y)
+    });
     while let Some(e) = events.next(&mut window) {
         if let Some(_) = e.render_args() {
-            let pos_x = rng.gen_range(0,x);
-            let pos_y = rng.gen_range(0,y);
-            let color = [rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)];
-            buf.put_pixel(pos_x,pos_y,im::Rgba(color));
+            if let Ok(command) = rx.try_recv(){
+                buf.put_pixel(command.x,command.y,command.color);
+            }
             texture.update(&mut texture_context, &buf).unwrap();
             window.draw_2d(&e, |c, g, device| {
                     texture_context.encoder.flush(device);
                     image(&texture, c.transform, g);
             });
+
         }
+    }
+}
+
+fn calc(tx: SyncSender<DrawCommand>, max_x:u32, max_y:u32){
+    let mut rng = rand::thread_rng();
+    let mut c = 0;
+    loop{
+        let x = rng.gen_range(0,max_x);
+        let y = rng.gen_range(0,max_y);
+        let color = im::Rgba([rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)]);
+        tx.send(DrawCommand{x, y, color});
+        println!("pixel {}!", c);
+        c+=1;
     }
 }

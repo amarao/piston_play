@@ -834,6 +834,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62c93564eef40a9920d026697f63d224efd7ac80981fb418fe1dad447c2d9bdd"
 
 [[package]]
+name = "piston-timer_controller"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91141b4f6b712cbda85369bf0d78c66fc1ef9ff8c81d866e01a1e8896e2f5017"
+dependencies = [
+ "pistoncore-input",
+]
+
+[[package]]
 name = "piston-viewport"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -878,6 +887,7 @@ dependencies = [
  "image",
  "itertools",
  "piston",
+ "piston-timer_controller",
  "piston_window",
  "rand",
  "vecmath",
