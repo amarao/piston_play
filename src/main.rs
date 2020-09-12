@@ -3,6 +3,7 @@ extern crate image as im;
 
 use piston_window::*;
 use piston::event_loop::Events;
+use rand::Rng;
 
 fn main() {
     let x = 1920;
@@ -18,15 +19,20 @@ fn main() {
         factory: window.factory.clone(),
         encoder: window.factory.create_command_buffer().into()
     };
-    let mut events = Events::new(EventSettings::new().lazy(false));
-    let buf = im::ImageBuffer::new(x, y);
+    let mut buf = im::ImageBuffer::new(x, y);
     let mut texture: G2dTexture = Texture::from_image(
                 &mut texture_context,
                 &buf,
                 &TextureSettings::new()
             ).unwrap();
+    let mut events = Events::new(EventSettings::new().lazy(false));
+    let mut rng = rand::thread_rng();
     while let Some(e) = events.next(&mut window) {
         if let Some(_) = e.render_args() {
+            let pos_x = rng.gen_range(0,x);
+            let pos_y = rng.gen_range(0,y);
+            let color = [rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)];
+            buf.put_pixel(pos_x,pos_y,im::Rgba(color));
             texture.update(&mut texture_context, &buf).unwrap();
             window.draw_2d(&e, |c, g, device| {
                     texture_context.encoder.flush(device);
