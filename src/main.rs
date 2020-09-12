@@ -1,5 +1,6 @@
 extern crate piston_window;
-extern crate image as im;
+extern crate image;
+use image::{RgbaImage, Rgba};
 use piston_window::*;
 use piston::event_loop::Events;
 use rand::Rng;
@@ -11,7 +12,7 @@ use std::sync::mpsc::{SyncSender, Receiver};
 struct DrawCommand {
     x: u32,
     y: u32,
-    color: im::Rgba<u8>
+    color: image::Rgba<u8>
 }
 #[derive(Debug)]
 enum Command {
@@ -23,9 +24,13 @@ enum Command {
 struct ControlCommand{
     command: Command
 }
-// fn scale<T>(buf: T, x:u32, y:u32, new_x:u32, new_y:u32) -> T{
-//     buf
-// }
+fn scale(buf: RgbaImage, x:u32, y:u32, new_x:u32, new_y:u32) -> RgbaImage{
+    buf
+}
+
+struct Control{
+    buf: RgbaImage
+}
 
 fn main() {
     let mut x = 1920;
@@ -41,10 +46,12 @@ fn main() {
         factory: window.factory.clone(),
         encoder: window.factory.create_command_buffer().into()
     };
-    let mut buf = im::ImageBuffer::from_fn(x, y, |_, __| { im::Rgba([255,255,255,255])});
+    let mut ctrl = Control{
+        buf: image::ImageBuffer::from_fn(x, y, |_, __| { image::Rgba([255,255,255,255])})
+    };
     let mut texture: G2dTexture = Texture::from_image(
                 &mut texture_context,
-                &buf,
+                &ctrl.buf,
                 &TextureSettings::new()
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
@@ -64,11 +71,11 @@ fn main() {
             }
             let mut c = 0;
             while let Ok(command) = draw_rx.try_recv(){
-                buf.put_pixel(command.x,command.y,command.color);
+                ctrl.buf.put_pixel(command.x,command.y,command.color);
                 c+=1;
             }
             control_tx.send(ControlCommand{command: Command::Count(c)}).unwrap();
-            texture.update(&mut texture_context, &buf).unwrap();
+            texture.update(&mut texture_context, &ctrl.buf).unwrap();
             window.draw_2d(&e, |c, g, device| {
                     texture_context.encoder.flush(device);
                     image(&texture, c.transform, g);
@@ -99,7 +106,7 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
         }
         let x = rng.gen_range(0,max_x);
         let y = rng.gen_range(0,max_y);
-        let color = im::Rgba([rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)]);
+        let color = image::Rgba([rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)]);
         if let Err(_)  = draw.send(DrawCommand{x, y, color}){
             break
         }
