@@ -37,13 +37,13 @@ fn main() {
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
     let mut rng = rand::thread_rng();
-    let (tx,rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
+    let (tx,rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
     thread::spawn(move ||{
             calc(tx,x,y)
     });
     while let Some(e) = events.next(&mut window) {
         if let Some(_) = e.render_args() {
-            if let Ok(command) = rx.try_recv(){
+            while let Ok(command) = rx.try_recv(){
                 buf.put_pixel(command.x,command.y,command.color);
             }
             texture.update(&mut texture_context, &buf).unwrap();
@@ -64,7 +64,8 @@ fn calc(tx: SyncSender<DrawCommand>, max_x:u32, max_y:u32){
         let y = rng.gen_range(0,max_y);
         let color = im::Rgba([rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)]);
         tx.send(DrawCommand{x, y, color});
-        println!("pixel {}!", c);
+        thread::sleep(Duration::from_millis(1));
+        // println!("pixel {}!", c);
         c+=1;
     }
 }
