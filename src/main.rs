@@ -33,9 +33,6 @@ fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImag
             Rgba([255,255,255,255])
         }
     })
-    // image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
-    //     Rgba([255,25,255,255])
-    // })
 }
 
 fn main() {
@@ -110,8 +107,9 @@ fn main() {
                     texture_context.encoder.flush(device);
                     image(&texture, c.transform, g);
             });
-
+            window.event(&e);
         }
+
     }
 }
 
