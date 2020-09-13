@@ -26,20 +26,16 @@ struct ControlCommand{
     command: Command
 }
 fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImage{
-    // image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
-    //     if x <= old_x && y <= old_y {
-    //      *(buf.get_pixel(x, y))
-    //  }else{
-    //      Rgba([255,255,255,255])
-    //  }
-    // })
     image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
-        Rgba([255,25,255,255])
+        if x < old_x && y < old_y {
+         *(buf.get_pixel(x, y))
+     }else{
+         Rgba([255,255,255,255])
+     }
     })
-}
-
-struct Control{
-    buf: RgbaImage
+    // image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
+    //     Rgba([255,25,255,255])
+    // })
 }
 
 fn main() {
@@ -56,14 +52,12 @@ fn main() {
         factory: window.factory.clone(),
         encoder: window.factory.create_command_buffer().into()
     };
-    let mut ctrl = Control{
-        buf: image::ImageBuffer::from_fn(x, y, |_, __| { image::Rgba([255,255,255,255])})
-    };
+    let mut buf = image::ImageBuffer::from_fn(x, y, |_, __| { image::Rgba([255,255,255,255])});
     // println!("{:?}",ctrl.buf.get_pixel(0,0)[0]);
     // panic!("");
     let mut texture: G2dTexture = Texture::from_image(
                 &mut texture_context,
-                &ctrl.buf,
+                &buf,
                 &TextureSettings::new()
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
@@ -74,29 +68,33 @@ fn main() {
     });
     while let Some(e) = events.next(&mut window) {
         if let Some(draw_event) = e.render_args() {
-            if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y{
+            if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
                 let new_x = draw_event.draw_size[0];
                 let new_y = draw_event.draw_size[1];
                 x = new_x;
                 y = new_y;
                 println!("Resolution change from {}x{} to {}x{}", x, y, new_x, new_y);
                 control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
-                while let Ok(command) = draw_rx.try_recv(){}
-                ctrl.buf = scale(ctrl.buf, x, y, new_x, new_y);
+                while let Ok(_command) = draw_rx.try_recv(){}
+                buf = scale(buf, x, y, new_x, new_y);
                 control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
-
+                texture = Texture::from_image(
+                    &mut texture_context,
+                    &buf,
+                    &TextureSettings::new()
+                ).unwrap();
             }
             let mut c = 0;
             while let Ok(command) = draw_rx.try_recv(){
                 if command.x > x || command.y > y {
-                    println!("Out of bound write: {}x{}", command.x, command.y)
+                    panic!("Out of bound write: {}x{}", command.x, command.y)
                 }else{
-                    ctrl.buf.put_pixel(command.x,command.y,command.color);
+                    buf.put_pixel(command.x,command.y,command.color);
                 }
                 c+=1;
             }
             control_tx.send(ControlCommand{command: Command::Count(c)}).unwrap();
-            texture.update(&mut texture_context, &ctrl.buf).unwrap();
+            texture.update(&mut texture_context, &buf).unwrap();
             window.draw_2d(&e, |c, g, device| {
                     texture_context.encoder.flush(device);
                     image(&texture, c.transform, g);
@@ -124,8 +122,8 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
                 Ok(cmd) => {
                     match cmd.command {
-                        Command::Count(counter) => {
-                                println!("counter: {}", counter);
+                        Command::Count(_counter) => {
+                                // println!("counter: {}", counter);
                             },
                         Command::NewResolution(new_x, new_y) => {
                                 println!("new resolution:{}x{}", new_x, new_y);
