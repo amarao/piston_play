@@ -886,6 +886,7 @@ version = "0.1.0"
 dependencies = [
  "image",
  "itertools",
+ "num_cpus",
  "piston",
  "piston-timer_controller",
  "piston_window",

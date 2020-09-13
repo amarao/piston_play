@@ -41,12 +41,19 @@ fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImag
 fn main() {
     let mut x = 800;
     let mut y  = 600;
+    let cpus = num_cpus::get();
 
     let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
-    let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(8);
-    thread::spawn(move ||{
-            calc(draw_tx, control_rx, x, y)
-    });
+    let mut control_txes: Vec<SyncSender<ControlCommand>> = Vec::new();
+    for cpu in 1..cpus{
+        let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(8);
+        control_txes.push(control_tx);
+        let thread_draw_tx = draw_tx.clone();
+        thread::spawn(move ||{
+                println!("Spawning thread for cpu {}", cpu);
+                calc(thread_draw_tx, control_rx, x, y)
+        });
+    }
 
     let mut window: PistonWindow =
         WindowSettings::new("test", (x, y))
@@ -58,8 +65,6 @@ fn main() {
         encoder: window.factory.create_command_buffer().into()
     };
     let mut buf = image::ImageBuffer::from_fn(x, y, |_, __| { image::Rgba([255,255,255,255])});
-    // println!("{:?}",ctrl.buf.get_pixel(0,0)[0]);
-    // panic!("");
     let mut texture: G2dTexture = Texture::from_image(
                 &mut texture_context,
                 &buf,
@@ -74,17 +79,19 @@ fn main() {
                 let new_x = draw_event.draw_size[0];
                 let new_y = draw_event.draw_size[1];
                 println!("Resolution change from {}x{} to {}x{}", x, y, new_x, new_y);
-                control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
-                while let Ok(_command) = draw_rx.try_recv(){}
-                buf = scale(buf, x, y, new_x, new_y);
-                x = new_x;
-                y = new_y;
-                control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
-                texture = Texture::from_image(
-                    &mut texture_context,
-                    &buf,
-                    &TextureSettings::new()
-                ).unwrap();
+                for control_tx in &control_txes{
+                    control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
+                    while let Ok(_command) = draw_rx.try_recv(){}
+                    buf = scale(buf, x, y, new_x, new_y);
+                    x = new_x;
+                    y = new_y;
+                    control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
+                    texture = Texture::from_image(
+                        &mut texture_context,
+                        &buf,
+                        &TextureSettings::new()
+                    ).unwrap();
+                }
             }
             let mut c = 0;
             while let Ok(command) = draw_rx.try_recv(){
@@ -95,7 +102,9 @@ fn main() {
                 }
                 c+=1;
             }
-            control_tx.send(ControlCommand{command: Command::Count(c)}).unwrap();
+            for control_tx in &control_txes{
+                control_tx.send(ControlCommand{command: Command::Count(c)}).unwrap();
+            }
             texture.update(&mut texture_context, &buf).unwrap();
             window.draw_2d(&e, |c, g, device| {
                     texture_context.encoder.flush(device);
@@ -145,7 +154,12 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
         }
         let x = rng.gen_range(0,cur_x);
         let y = rng.gen_range(0,cur_y);
-        let color = image::Rgba([rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255), rng.gen_range(0,255)]);
+        let color = image::Rgba([
+            rng.gen_range(0,255),
+            rng.gen_range(0,255),
+            rng.gen_range(0,255),
+            rng.gen_range(0,255)]
+        );
         if let Err(_)  = draw.send(DrawCommand{x, y, color}){
             break
         }
