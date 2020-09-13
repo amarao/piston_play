@@ -41,11 +41,16 @@ fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImag
 fn main() {
     let mut x = 800;
     let mut y  = 600;
-    let opengl = OpenGL::V3_2;
+
+    let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
+    let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(8);
+    thread::spawn(move ||{
+            calc(draw_tx, control_rx, x, y)
+    });
+
     let mut window: PistonWindow =
         WindowSettings::new("test", (x, y))
         .exit_on_esc(true)
-        .graphics_api(opengl)
         .build()
         .unwrap();
     let mut texture_context = TextureContext {
@@ -61,11 +66,8 @@ fn main() {
                 &TextureSettings::new()
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
-    let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
-    let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(8);
-    thread::spawn(move ||{
-            calc(draw_tx, control_rx, x, y)
-    });
+
+
     while let Some(e) = events.next(&mut window) {
         if let Some(draw_event) = e.render_args() {
             if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
