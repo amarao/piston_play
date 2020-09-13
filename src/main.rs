@@ -28,10 +28,10 @@ struct ControlCommand{
 fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImage{
     image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
         if x < old_x && y < old_y {
-         *(buf.get_pixel(x, y))
-     }else{
-         Rgba([255,255,255,255])
-     }
+            *(buf.get_pixel(x, y))
+        }else{
+            Rgba([255,255,255,255])
+        }
     })
     // image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
     //     Rgba([255,25,255,255])
@@ -71,12 +71,12 @@ fn main() {
             if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
                 let new_x = draw_event.draw_size[0];
                 let new_y = draw_event.draw_size[1];
-                x = new_x;
-                y = new_y;
                 println!("Resolution change from {}x{} to {}x{}", x, y, new_x, new_y);
                 control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
                 while let Ok(_command) = draw_rx.try_recv(){}
                 buf = scale(buf, x, y, new_x, new_y);
+                x = new_x;
+                y = new_y;
                 control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
                 texture = Texture::from_image(
                     &mut texture_context,
