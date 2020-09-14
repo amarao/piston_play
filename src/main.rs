@@ -2,7 +2,7 @@ extern crate piston_window;
 extern crate image;
 use image::{RgbaImage, Rgba};
 use piston_window::*;
-use piston::event_loop::Events;
+use piston;
 use rand::Rng;
 use std::thread;
 use std::time::Duration;
@@ -38,6 +38,7 @@ fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImag
 fn main() {
     let mut x = 800;
     let mut y  = 600;
+    let updates_per_second = 2;
     let cpus = num_cpus::get();
 
     let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
@@ -67,10 +68,29 @@ fn main() {
                 &buf,
                 &TextureSettings::new()
             ).unwrap();
-    let mut events = Events::new(EventSettings::new().lazy(false));
-
-
+    let mut events = Events::new(EventSettings::new().lazy(false)).ups(updates_per_second);
     while let Some(e) = events.next(&mut window) {
+        match e{
+
+            // piston_window::Event::Render(render_args) => {
+            //     println!("Render {:?}", render_args);
+            // },
+            // Event::AfterRender(after_render_args) => {
+            //     println!("Render {:?}", after_render_args);
+            // },
+            // Event::Update(update_args) => {
+            //     println!("Render {:?}", update_args);
+            // },
+            piston::Event::Loop(ref loop_data) => {
+                // println!("Loop loop:{:?}", &loop_data);
+            }
+            piston::Event::Input(ref input, ts) => {
+                println!("Input ts:{:?} input:{:?}", ts, &input);
+            },
+            ref something => {
+                println!("Unexpected something: {:?}", something);
+            },
+        }
         if let Some(draw_event) = e.render_args() {
             if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
                 let new_x = draw_event.draw_size[0];
