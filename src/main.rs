@@ -72,19 +72,13 @@ fn main() {
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                // println!("Loop idle:{:?}", &idle);
+                println!("Loop idle:{:?}", &idle);
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
             piston::Event::Loop(piston::Loop::Render(_)) => {}
             piston::Event::Loop(piston::Loop::Update(_)) => {}
-            piston::Event::Input(ref input, ts) => {
-                match input {
-                    piston::Input::Resize(piston::ResizeArgs{window_size:[w_x, w_y], draw_size:[dr_x, dr_y]}) => {
+            piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:[w_x, w_y], draw_size:[dr_x, dr_y]}), ts) => {
                         println!("Resize event: ts: {:?}, window: {}x{}, draw: {}x{}", ts, w_x, w_y, dr_x, dr_y);
-                    }
-                    _ => {println!("other input");}
-                }
-
             },
             piston::Event::Input(ref input, ts) => {
                 println!("Input ts:{:?} input:{:?}", ts, &input);
