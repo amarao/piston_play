@@ -71,19 +71,21 @@ fn main() {
     let mut events = Events::new(EventSettings::new().lazy(false)).ups(updates_per_second);
     while let Some(e) = events.next(&mut window) {
         match e{
-
-            // piston_window::Event::Render(render_args) => {
-            //     println!("Render {:?}", render_args);
-            // },
-            // Event::AfterRender(after_render_args) => {
-            //     println!("Render {:?}", after_render_args);
-            // },
-            // Event::Update(update_args) => {
-            //     println!("Render {:?}", update_args);
-            // },
-            piston::Event::Loop(ref loop_data) => {
-                // println!("Loop loop:{:?}", &loop_data);
+            piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
+                // println!("Loop idle:{:?}", &idle);
             }
+            piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
+            piston::Event::Loop(piston::Loop::Render(_)) => {}
+            piston::Event::Loop(piston::Loop::Update(_)) => {}
+            piston::Event::Input(ref input, ts) => {
+                match input {
+                    piston::Input::Resize(piston::ResizeArgs{window_size:[w_x, w_y], draw_size:[dr_x, dr_y]}) => {
+                        println!("Resize event: ts: {:?}, window: {}x{}, draw: {}x{}", ts, w_x, w_y, dr_x, dr_y);
+                    }
+                    _ => {println!("other input");}
+                }
+
+            },
             piston::Event::Input(ref input, ts) => {
                 println!("Input ts:{:?} input:{:?}", ts, &input);
             },
