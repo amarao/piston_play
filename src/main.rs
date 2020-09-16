@@ -43,7 +43,7 @@ fn main() {
     let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
     let mut control_txes: Vec<SyncSender<ControlCommand>> = Vec::new();
     for cpu in 1..cpus{
-        let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(8);
+        let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(1);
         control_txes.push(control_tx);
         let thread_draw_tx = draw_tx.clone();
         thread::spawn(move ||{
@@ -115,17 +115,23 @@ fn main() {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
                 for control_tx in &control_txes{
                     control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
-                    while let Ok(_command) = draw_rx.try_recv(){}
-                    buf = scale(buf, x, y, new_x, new_y);
-                    x = new_x;
-                    y = new_y;
-                    control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
-                    texture = Texture::from_image(
-                        &mut texture_context,
-                        &buf,
-                        &TextureSettings::new()
-                    ).unwrap();
                 }
+                while let Ok(_command) = draw_rx.try_recv(){};
+                if let Ok(_) = draw_rx.try_recv(){
+                    panic!("queue must be empty");
+                }
+                for control_tx in &control_txes{
+                    control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
+                }
+                buf = scale(buf, x, y, new_x, new_y);
+                x = new_x;
+                y = new_y;
+
+                texture = Texture::from_image(
+                    &mut texture_context,
+                    &buf,
+                    &TextureSettings::new()
+                ).unwrap();
             },
             piston::Event::Input(ref input, ts) => {
                 // println!("Input ts:{:?} input:{:?}", ts, &input);
@@ -160,7 +166,7 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
                                 // println!("counter: {}", counter);
                             },
                         Command::NewResolution(new_x, new_y) => {
-                                // println!("new resolution:{}x{}", new_x, new_y);
+                                println!("new resolution:{}x{}", new_x, new_y);
                                 cur_x = new_x;
                                 cur_y = new_y;
                                 active = false;
@@ -168,7 +174,7 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
                             },
                         Command::Continue => {
                             active = true;
-                            // println!("Continue to render.");
+                            println!("Continue to render.");
                             break;
                         }
                     }
