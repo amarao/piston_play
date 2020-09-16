@@ -5,7 +5,7 @@ use piston_window::*;
 use piston;
 use rand::Rng;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::sync::mpsc;
 use std::sync::mpsc::{SyncSender, Receiver};
 
@@ -38,7 +38,6 @@ fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImag
 fn main() {
     let mut x = 800;
     let mut y  = 600;
-    let updates_per_second = 2;
     let cpus = num_cpus::get();
 
     let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
@@ -68,15 +67,50 @@ fn main() {
                 &buf,
                 &TextureSettings::new()
             ).unwrap();
-    let mut events = Events::new(EventSettings::new().lazy(false)).ups(updates_per_second);
+    let mut events = Events::new(EventSettings::new().lazy(false));
+    let mut draw_per_sec = 16000;
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                // println!("Loop idle:{:?}", &idle);
+                // println!("Idle: {:?}", idle);
+                let start = std::time::Instant::now();
+                let mut draws = (idle.dt*draw_per_sec as f64) as i32;
+                if draws < 16 {
+                    draws = 16;
+                }
+                for count in (0..draws) {
+                    if let Ok(cmd) = draw_rx.try_recv(){
+                        buf.put_pixel(cmd.x,cmd.y,cmd.color);
+                    }else{
+                        break;
+                    }
+                }
+                let spent = (std::time::Instant::now() - start).as_secs_f64();
+                let actual_draw_per_sec = ((draws as f64)/spent) as i32;
+                if actual_draw_per_sec < 2 {
+                    println!("oops, per sec: {}, draws: {}, sepnt: {}", actual_draw_per_sec, draws, spent);
+                    continue;
+                }
+                if actual_draw_per_sec/draw_per_sec > 100 || draw_per_sec/actual_draw_per_sec > 100 {
+                    println!("Changing pace. idle.dt:{}, spent: {}, old rate: {}, new rate: {}", idle.dt, spent, draw_per_sec, actual_draw_per_sec);
+                    draw_per_sec = actual_draw_per_sec / 2;
+                    if draw_per_sec < cpus as i32 {
+                        draw_per_sec = cpus as i32 ;
+                    }
+                }
+
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
-            piston::Event::Loop(piston::Loop::Render(_)) => {}
-            piston::Event::Loop(piston::Loop::Update(_)) => {}
+            piston::Event::Loop(piston::Loop::Render(_)) => {
+                texture.update(&mut texture_context, &buf).unwrap();
+                window.draw_2d(&e, |c, g, device| {
+                        texture_context.encoder.flush(device);
+                        image(&texture, c.transform, g);
+                });
+            }
+            piston::Event::Loop(piston::Loop::Update(_)) => {
+
+            }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
                 for control_tx in &control_txes{
@@ -100,30 +134,7 @@ fn main() {
                 println!("Unexpected something: {:?}", something);
             },
         }
-        if let Some(draw_event) = e.render_args() {
-            if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
-
-            }
-            let mut c = 0;
-            while let Ok(command) = draw_rx.try_recv(){
-                if command.x > x || command.y > y {
-                    panic!("Out of bound write: {}x{}", command.x, command.y)
-                }else{
-                    buf.put_pixel(command.x,command.y,command.color);
-                }
-                c+=1;
-            }
-            for control_tx in &control_txes{
-                control_tx.send(ControlCommand{command: Command::Count(c)}).unwrap();
-            }
-            texture.update(&mut texture_context, &buf).unwrap();
-            window.draw_2d(&e, |c, g, device| {
-                    texture_context.encoder.flush(device);
-                    image(&texture, c.transform, g);
-            });
-            window.event(&e);
-        }
-
+        window.event(&e);
     }
 }
 
@@ -175,6 +186,6 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
         if let Err(_)  = draw.send(DrawCommand{x, y, color}){
             break
         }
-        thread::sleep(Duration::from_millis(1));
+        // thread::sleep(Duration::from_millis(1));
     }
 }
