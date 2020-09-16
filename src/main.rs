@@ -72,26 +72,13 @@ fn main() {
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                println!("Loop idle:{:?}", &idle);
+                // println!("Loop idle:{:?}", &idle);
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
             piston::Event::Loop(piston::Loop::Render(_)) => {}
             piston::Event::Loop(piston::Loop::Update(_)) => {}
-            piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:[w_x, w_y], draw_size:[dr_x, dr_y]}), ts) => {
-                        println!("Resize event: ts: {:?}, window: {}x{}, draw: {}x{}", ts, w_x, w_y, dr_x, dr_y);
-            },
-            piston::Event::Input(ref input, ts) => {
-                println!("Input ts:{:?} input:{:?}", ts, &input);
-            },
-            ref something => {
-                println!("Unexpected something: {:?}", something);
-            },
-        }
-        if let Some(draw_event) = e.render_args() {
-            if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
-                let new_x = draw_event.draw_size[0];
-                let new_y = draw_event.draw_size[1];
-                println!("Resolution change from {}x{} to {}x{}", x, y, new_x, new_y);
+            piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
+                println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
                 for control_tx in &control_txes{
                     control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
                     while let Ok(_command) = draw_rx.try_recv(){}
@@ -105,6 +92,17 @@ fn main() {
                         &TextureSettings::new()
                     ).unwrap();
                 }
+            },
+            piston::Event::Input(ref input, ts) => {
+                // println!("Input ts:{:?} input:{:?}", ts, &input);
+            },
+            ref something => {
+                println!("Unexpected something: {:?}", something);
+            },
+        }
+        if let Some(draw_event) = e.render_args() {
+            if draw_event.draw_size[0] != x || draw_event.draw_size[1] != y {
+
             }
             let mut c = 0;
             while let Ok(command) = draw_rx.try_recv(){
@@ -151,7 +149,7 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
                                 // println!("counter: {}", counter);
                             },
                         Command::NewResolution(new_x, new_y) => {
-                                println!("new resolution:{}x{}", new_x, new_y);
+                                // println!("new resolution:{}x{}", new_x, new_y);
                                 cur_x = new_x;
                                 cur_y = new_y;
                                 active = false;
@@ -159,7 +157,7 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
                             },
                         Command::Continue => {
                             active = true;
-                            println!("Continue to render.");
+                            // println!("Continue to render.");
                             break;
                         }
                     }
