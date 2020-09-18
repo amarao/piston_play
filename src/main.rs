@@ -5,9 +5,9 @@ use piston_window::*;
 use piston;
 use rand::Rng;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::sync::mpsc;
-use std::sync::mpsc::{SyncSender, Receiver};
+use std::sync::mpsc::{SyncSender, Sender, Receiver, TrySendError};
 
 struct DrawCommand {
     x: u32,
@@ -16,7 +16,6 @@ struct DrawCommand {
 }
 #[derive(Debug)]
 enum Command {
-    Count(u32),
     NewResolution(u32, u32),
     Continue
 }
@@ -41,9 +40,9 @@ fn main() {
     let cpus = num_cpus::get();
 
     let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
-    let mut control_txes: Vec<SyncSender<ControlCommand>> = Vec::new();
+    let mut control_txes: Vec<Sender<ControlCommand>> = Vec::new();
     for cpu in 1..cpus{
-        let (control_tx, control_rx): (SyncSender<ControlCommand>, Receiver<ControlCommand>) = mpsc::sync_channel(1);
+        let (control_tx, control_rx): (Sender<ControlCommand>, Receiver<ControlCommand>) = mpsc::channel();
         control_txes.push(control_tx);
         let thread_draw_tx = draw_tx.clone();
         thread::spawn(move ||{
@@ -72,13 +71,12 @@ fn main() {
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                // println!("Idle: {:?}", idle);
                 let start = std::time::Instant::now();
                 let mut draws = (idle.dt*draw_per_sec as f64) as i32;
                 if draws < 16 {
                     draws = 16;
                 }
-                for count in (0..draws) {
+                for _count in 0..draws {
                     if let Ok(cmd) = draw_rx.try_recv(){
                         buf.put_pixel(cmd.x,cmd.y,cmd.color);
                     }else{
@@ -116,11 +114,14 @@ fn main() {
                 for control_tx in &control_txes{
                     control_tx.send(ControlCommand{command: Command::NewResolution(new_x, new_y)}).unwrap();
                 }
+                println!("Purge queue.");
                 while let Ok(_command) = draw_rx.try_recv(){};
                 if let Ok(_) = draw_rx.try_recv(){
                     panic!("queue must be empty");
                 }
+
                 for control_tx in &control_txes{
+                    println!("Sending continue.");
                     control_tx.send(ControlCommand{command:Command::Continue}).unwrap();
                 }
                 buf = scale(buf, x, y, new_x, new_y);
@@ -133,8 +134,7 @@ fn main() {
                     &TextureSettings::new()
                 ).unwrap();
             },
-            piston::Event::Input(ref input, ts) => {
-                // println!("Input ts:{:?} input:{:?}", ts, &input);
+            piston::Event::Input(_, _) => {
             },
             ref something => {
                 println!("Unexpected something: {:?}", something);
@@ -159,25 +159,18 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
                     }
                     break;
                 }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
-                Ok(cmd) => {
-                    match cmd.command {
-                        Command::Count(_counter) => {
-                                // println!("counter: {}", counter);
-                            },
-                        Command::NewResolution(new_x, new_y) => {
-                                println!("new resolution:{}x{}", new_x, new_y);
-                                cur_x = new_x;
-                                cur_y = new_y;
-                                active = false;
-                                continue;
-                            },
-                        Command::Continue => {
-                            active = true;
-                            println!("Continue to render.");
-                            break;
-                        }
-                    }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {return;},
+                Ok(ControlCommand{command: Command::NewResolution(new_x, new_y)}) => {
+                        println!("new resolution:{}x{}", new_x, new_y);
+                        cur_x = new_x;
+                        cur_y = new_y;
+                        active = false;
+                        continue;
+                },
+                Ok(ControlCommand{command:Command::Continue}) => {
+                    active = true;
+                    println!("Continue to render.");
+                    break;
                 }
             }
         }
@@ -189,8 +182,14 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
             rng.gen_range(0,255),
             rng.gen_range(0,255)]
         );
-        if let Err(_)  = draw.send(DrawCommand{x, y, color}){
-            break
+        match draw.try_send(DrawCommand{x, y, color}){
+            Err(TrySendError::Disconnected(_)) => {
+                return;
+            },
+            Err(TrySendError::Full(_)) =>{
+                continue;
+            }
+            Ok(_) => {}
         }
         // thread::sleep(Duration::from_millis(1));
     }
