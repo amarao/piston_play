@@ -67,36 +67,37 @@ fn main() {
                 &TextureSettings::new()
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
-    let mut draw_per_sec = 16000;
+    events.set_ups(5);
+    let mut draw_per_sec = 10000;
+    let mut cnt = 0;
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
                 let start = std::time::Instant::now();
                 let mut draws = (idle.dt*draw_per_sec as f64) as i32;
-                if draws < 16 {
-                    draws = 16;
+                if draws < 100 {
+                    draws = 100;
                 }
-                for _count in 0..draws {
-                    if let Ok(cmd) = draw_rx.try_recv(){
-                        buf.put_pixel(cmd.x,cmd.y,cmd.color);
-                    }else{
-                        break;
+                cnt = 0;
+                'full: for _bucket in 0..10 {
+                    // println!("bucket: {}, cnt: {}", bucket, cnt);
+                    for _count in 0..draws/10 {
+                        if let Ok(cmd) = draw_rx.try_recv(){
+                            buf.put_pixel(cmd.x,cmd.y,cmd.color);
+                            cnt += 1;
+                        }else{
+                            break 'full;
+                        }
+                    }
+                    let spent = (std::time::Instant::now() - start).as_secs_f64();
+                    if  spent > idle.dt * 2.0 && draw_per_sec > 10000 {
+                        // println!("overtime");
+                        draw_per_sec -= draw_per_sec / 10;
+                    }
+                    if spent < idle.dt / 2.0 {
+                        draw_per_sec += draw_per_sec / 10;
                     }
                 }
-                let spent = (std::time::Instant::now() - start).as_secs_f64();
-                let actual_draw_per_sec = ((draws as f64)/spent) as i32;
-                if actual_draw_per_sec < 2 {
-                    println!("oops, per sec: {}, draws: {}, sepnt: {}", actual_draw_per_sec, draws, spent);
-                    continue;
-                }
-                if actual_draw_per_sec/draw_per_sec > 100 || draw_per_sec/actual_draw_per_sec > 100 {
-                    println!("Changing pace. idle.dt:{}, spent: {}, old rate: {}, new rate: {}", idle.dt, spent, draw_per_sec, actual_draw_per_sec);
-                    draw_per_sec = actual_draw_per_sec / 2;
-                    if draw_per_sec < cpus as i32 {
-                        draw_per_sec = cpus as i32 ;
-                    }
-                }
-
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
             piston::Event::Loop(piston::Loop::Render(_)) => {
@@ -107,6 +108,7 @@ fn main() {
                 });
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
+                println!{"last cycle draw {} pixels, calculated speed is {} pps.", cnt, draw_per_sec};
 
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
@@ -191,6 +193,5 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
             }
             Ok(_) => {}
         }
-        // thread::sleep(Duration::from_millis(1));
     }
 }
