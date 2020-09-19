@@ -1,7 +1,7 @@
-extern crate piston_window;
-extern crate image;
-use image::{RgbaImage, Rgba};
-use piston_window::*;
+// extern crate piston_window;
+// extern crate image;
+use image as im;
+use piston_window as pw;
 use piston;
 use rand::Rng;
 use std::thread;
@@ -11,7 +11,7 @@ use std::sync::mpsc::{SyncSender, Sender, Receiver};
 struct DrawCommand {
     x: u32,
     y: u32,
-    color: image::Rgba<u8>
+    color: im::Rgba<u8>
 }
 #[derive(Debug)]
 enum Command {
@@ -22,12 +22,12 @@ enum Command {
 struct ControlCommand{
     command: Command
 }
-fn scale(buf: RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> RgbaImage{
-    image::ImageBuffer::from_fn(new_x, new_y, |x, y| {
+fn scale(buf: im::RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> im::RgbaImage{
+    im::ImageBuffer::from_fn(new_x, new_y, |x, y| {
         if x < old_x && y < old_y {
             *(buf.get_pixel(x, y))
         }else{
-            Rgba([255,255,255,255])
+            im::Rgba([255,255,255,255])
         }
     })
 }
@@ -49,23 +49,22 @@ fn main() {
         });
     }
 
-    let mut window: PistonWindow =
-        WindowSettings::new("test", (x, y))
+    let mut window: pw::PistonWindow =
+        pw::WindowSettings::new("test", (x, y))
         .exit_on_esc(true)
         .build()
         .unwrap();
-    let mut texture_context = TextureContext {
+    let mut texture_context = pw::TextureContext {
         factory: window.factory.clone(),
         encoder: window.factory.create_command_buffer().into()
     };
-    let mut buf = image::ImageBuffer::from_fn(x, y, |_, __| { image::Rgba([255,255,255,255])});
-    let mut texture: G2dTexture = Texture::from_image(
+    let mut buf = im::ImageBuffer::from_fn(x, y, |_, __| { im::Rgba([255,255,255,255]) });
+    let mut texture: pw::G2dTexture = pw:: Texture::from_image(
                 &mut texture_context,
                 &buf,
-                &TextureSettings::new()
+                &pw::TextureSettings::new()
             ).unwrap();
-    let mut events = Events::new(EventSettings::new().lazy(false));
-    events.set_ups(2);
+    let mut events = pw::Events::new(pw::EventSettings::new());
     let mut draw_per_sec = 10000;
     let mut cnt = 0;
 
@@ -100,10 +99,13 @@ fn main() {
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
             piston::Event::Loop(piston::Loop::Render(_)) => {
                 texture.update(&mut texture_context, &buf).unwrap();
-                window.draw_2d(&e, |c, g, device| {
+                window.draw_2d(
+                    &e,
+                    |context, graph_2d, device| {
                         texture_context.encoder.flush(device);
-                        image(&texture, c.transform, g);
-                });
+                        pw::image(&texture, context.transform, graph_2d);
+                    }
+                );
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
                 println!{"last cycle draw {} pixels, calculated speed is {} pps.", cnt, draw_per_sec};
@@ -121,10 +123,10 @@ fn main() {
                 buf = scale(buf, x, y, new_x, new_y);
                 x = new_x;
                 y = new_y;
-                texture = Texture::from_image(
+                texture = pw::Texture::from_image(
                     &mut texture_context,
                     &buf,
-                    &TextureSettings::new()
+                    &pw::TextureSettings::new()
                 ).unwrap();
             },
             piston::Event::Input(_, _) => {
@@ -157,7 +159,7 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
         }
         let x = rng.gen_range(0,cur_x);
         let y = rng.gen_range(0,cur_y);
-        let color = image::Rgba([
+        let color = im::Rgba([
             rng.gen_range(0,255),
             rng.gen_range(0,255),
             rng.gen_range(0,255),
