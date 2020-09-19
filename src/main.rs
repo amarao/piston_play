@@ -5,7 +5,6 @@ use piston_window::*;
 use piston;
 use rand::Rng;
 use std::thread;
-// use std::time::Duration;
 use std::sync::mpsc;
 use std::sync::mpsc::{SyncSender, Sender, Receiver};
 
@@ -38,7 +37,7 @@ fn main() {
     let mut y  = 600;
     let cpus = num_cpus::get();
 
-    let (mut draw_tx, mut draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
+    let (draw_tx, mut draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
     let mut control_txes: Vec<Sender<ControlCommand>> = Vec::new();
     for cpu in 1..cpus{
         let (control_tx, control_rx): (Sender<ControlCommand>, Receiver<ControlCommand>) = mpsc::channel();
@@ -66,7 +65,7 @@ fn main() {
                 &TextureSettings::new()
             ).unwrap();
     let mut events = Events::new(EventSettings::new().lazy(false));
-    events.set_ups(5);
+    events.set_ups(2);
     let mut draw_per_sec = 10000;
     let mut cnt = 0;
 
@@ -112,13 +111,12 @@ fn main() {
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
-                // drop(draw_rx);
                 let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
                 draw_rx = new_draw_rx;
                 for control_tx in &control_txes{
-                    println!("{:?}", control_tx.send(ControlCommand{command: Command::NewResolution(
+                    control_tx.send(ControlCommand{command: Command::NewResolution(
                         new_x, new_y, new_draw_tx.clone()
-                    )}));
+                    )}).unwrap();
                 }
                 buf = scale(buf, x, y, new_x, new_y);
                 x = new_x;
@@ -165,8 +163,6 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
             rng.gen_range(0,255),
             rng.gen_range(0,255)]
         );
-        if let Err(e) = draw_cmd.send(DrawCommand{x, y, color}){
-            println!("err: {}", e);
-        }
+        if let Err(_) = draw_cmd.send(DrawCommand{x, y, color}){ continue ;}
     }
 }
