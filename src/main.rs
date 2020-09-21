@@ -54,17 +54,18 @@ fn main() {
         .exit_on_esc(true)
         .build()
         .unwrap();
-    let mut texture_context = pw::TextureContext {
-        factory: window.factory.clone(),
-        encoder: window.factory.create_command_buffer().into()
-    };
+
     let mut buf = im::ImageBuffer::from_fn(x, y, |_, __| { im::Rgba([255,255,255,255]) });
-    let mut texture: pw::G2dTexture = pw:: Texture::from_image(
-                &mut texture_context,
-                &buf,
-                &pw::TextureSettings::new()
-            ).unwrap();
-    let mut events = pw::Events::new(pw::EventSettings::new());
+
+    let mut events = pw::Events::new(
+        (||{
+            let mut settings = pw::EventSettings::new();
+            settings.ups = 2;
+            settings
+        })()
+    );
+
+
     let mut draw_per_sec = 10000;
     let mut cnt = 0;
 
@@ -98,7 +99,13 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
             piston::Event::Loop(piston::Loop::Render(_)) => {
-                texture.update(&mut texture_context, &buf).unwrap();
+                let mut texture_context = window.create_texture_context();
+                let mut texture: pw::G2dTexture = pw::Texture::from_image(
+                            &mut texture_context,
+                            &buf,
+                            &pw::TextureSettings::new()
+                        ).unwrap();
+                // texture.update(&mut texture_context, &buf).unwrap();
                 window.draw_2d(
                     &e,
                     |context, graph_2d, device| {
@@ -106,6 +113,8 @@ fn main() {
                         pw::image(&texture, context.transform, graph_2d);
                     }
                 );
+                drop(texture);
+                drop(texture_context);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
                 println!{"last cycle draw {} pixels, calculated speed is {} pps.", cnt, draw_per_sec};
@@ -123,11 +132,6 @@ fn main() {
                 buf = scale(buf, x, y, new_x, new_y);
                 x = new_x;
                 y = new_y;
-                texture = pw::Texture::from_image(
-                    &mut texture_context,
-                    &buf,
-                    &pw::TextureSettings::new()
-                ).unwrap();
             },
             piston::Event::Input(_, _) => {
             },
