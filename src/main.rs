@@ -51,6 +51,14 @@ impl Buffer{
         self.x = new_x;
         self.y = new_y;
     }
+
+    fn buf_ref(&self) -> &im::ImageBuffer<im::Rgba<u8>,Vec<u8>>{
+        &self.buf
+    }
+
+    fn buf_mut_ref(&mut self) -> &mut im::ImageBuffer<im::Rgba<u8>,Vec<u8>>{
+        & mut self.buf
+    }
 }
 
 
@@ -114,7 +122,7 @@ fn main() {
                     let cnt = process_draw_commands(
                         Duration::from_secs_f64(idle.dt),
                         &draw_rx,
-                        &mut buffer.buf
+                        buffer.buf_mut_ref()
                     );
                     println!("Idle: {}, cnt:{}", idle.dt, cnt);
             }
@@ -124,7 +132,7 @@ fn main() {
                 let start = Instant::now();
                 let texture: pw::G2dTexture = pw::Texture::from_image(
                             &mut texture_context,
-                            &buffer.buf,
+                            buffer.buf_ref(),
                             &pw::TextureSettings::new()
                         ).unwrap();
                 let texture_time = Instant::now();
