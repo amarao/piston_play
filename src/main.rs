@@ -1,5 +1,3 @@
-// extern crate piston_window;
-// extern crate image;
 use image as im;
 use piston_window as pw;
 use piston;
@@ -7,7 +5,9 @@ use rand::Rng;
 use std::thread;
 use std::sync::mpsc;
 use std::sync::mpsc::{SyncSender, Sender, Receiver};
+use std::time::{Instant, Duration};
 
+#[derive(Debug)]
 struct DrawCommand {
     x: u32,
     y: u32,
@@ -30,6 +30,22 @@ fn scale(buf: im::RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> im::
             im::Rgba([255,255,255,255])
         }
     })
+}
+
+fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, buf: &mut im::RgbaImage) -> u64{
+    let mut cnt = 0;
+    let start = Instant::now();
+    while Instant::now() - start < allocated_time {
+        for _count in 0..1024 {
+            cnt +=1;
+            if let Ok(cmd) = rx.try_recv(){
+                buf.put_pixel(cmd.x,cmd.y,cmd.color);
+            }else{
+                break;
+            }
+        }
+    }
+    cnt
 }
 
 fn main() {
@@ -61,64 +77,52 @@ fn main() {
         (||{
             let mut settings = pw::EventSettings::new();
             settings.ups = 2;
+            settings.max_fps = 6;
             settings
         })()
     );
 
 
-    let mut draw_per_sec = 10000;
-    let mut cnt = 0;
-
+    let mut texture_context = window.create_texture_context();
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                let start = std::time::Instant::now();
-                let mut draws = (idle.dt*draw_per_sec as f64) as i32;
-                if draws < 100 {
-                    draws = 100;
-                }
-                cnt = 0;
-                'full: for _bucket in 0..10 {
-                    // println!("bucket: {}, cnt: {}", bucket, cnt);
-                    for _count in 0..draws/10 {
-                        if let Ok(cmd) = draw_rx.try_recv(){
-                            buf.put_pixel(cmd.x,cmd.y,cmd.color);
-                            cnt += 1;
-                        }else{
-                            break 'full;
-                        }
-                    }
-                    let spent = (std::time::Instant::now() - start).as_secs_f64();
-                    if  spent > idle.dt * 2.0 && draw_per_sec > 10000 {
-                        draw_per_sec -= draw_per_sec / 10;
-                    }
-                    if spent < idle.dt / 2.0 {
-                        draw_per_sec += draw_per_sec / 10;
-                    }
-                }
+                    let cnt = process_draw_commands(
+                        Duration::from_secs_f64(idle.dt),
+                        &draw_rx,
+                        &mut buf
+                    );
+                    println!("Idle: {}, cnt:{}", idle.dt, cnt);
             }
-            piston::Event::Loop(piston::Loop::AfterRender(_)) => {}
+            piston::Event::Loop(piston::Loop::AfterRender(_)) => {
+            }
             piston::Event::Loop(piston::Loop::Render(_)) => {
-                let mut texture_context = window.create_texture_context();
+                let start = Instant::now();
                 let mut texture: pw::G2dTexture = pw::Texture::from_image(
                             &mut texture_context,
                             &buf,
                             &pw::TextureSettings::new()
                         ).unwrap();
-                // texture.update(&mut texture_context, &buf).unwrap();
+                let texture_time = Instant::now();
                 window.draw_2d(
                     &e,
-                    |context, graph_2d, device| {
-                        texture_context.encoder.flush(device);
-                        pw::image(&texture, context.transform, graph_2d);
+                    |context, graph_2d, device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
+                        // texture_context.encoder.flush(device);
+                        // println!("{:?}", pw::image);
+                        pw::image(
+                            &texture,
+                            context.transform,
+                            graph_2d
+                        );
+                        let img = pw::image::Image::new();
+                        // image.draw(&texture, default_draw_state(), c.transform, gl);
                     }
                 );
+                let draw_time = Instant::now();
+                println!("Render: {:?}, {:?} -> {:?}", texture_time - start, draw_time -texture_time, Instant::now());
                 drop(texture);
-                drop(texture_context);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
-                println!{"last cycle draw {} pixels, calculated speed is {} pps.", cnt, draw_per_sec};
-
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
