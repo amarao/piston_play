@@ -22,15 +22,37 @@ enum Command {
 struct ControlCommand{
     command: Command
 }
-fn scale(buf: im::RgbaImage, old_x:u32, old_y:u32, new_x:u32, new_y:u32) -> im::RgbaImage{
-    im::ImageBuffer::from_fn(new_x, new_y, |x, y| {
-        if x < old_x && y < old_y {
-            *(buf.get_pixel(x, y))
-        }else{
-            im::Rgba([255,255,255,255])
-        }
-    })
+
+struct Buffer{
+    x: u32,
+    y: u32,
+    buf: im::ImageBuffer<im::Rgba<u8>,Vec<u8>>
 }
+
+impl Buffer{
+    fn new(x:u32, y:u32)-> Self{
+        Buffer{
+            x: x,
+            y: y,
+            buf: im::ImageBuffer::from_fn(x, y, |_, __| { im::Rgba([255,255,255,255]) })
+        }
+    }
+
+
+    fn scale(&mut self, new_x:u32, new_y:u32){
+        let new_buf:im::ImageBuffer<im::Rgba<u8>,Vec<u8>> = im::ImageBuffer::from_fn(new_x, new_y, |x, y| {
+            if x < self.x && y < self.y {
+                *(self.buf.get_pixel(x, y))
+            }else{
+                im::Rgba([255,255,255,255])
+            }
+        });
+        self.buf = new_buf;
+        self.x = new_x;
+        self.y = new_y;
+    }
+}
+
 
 fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, buf: &mut im::RgbaImage) -> u64{
     let mut cnt = 0;
@@ -73,7 +95,7 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut buf = im::ImageBuffer::from_fn(x, y, |_, __| { im::Rgba([255,255,255,255]) });
+    let mut buffer = Buffer::new(x, y);
 
     let mut events = pw::Events::new(
         (||{
@@ -92,7 +114,7 @@ fn main() {
                     let cnt = process_draw_commands(
                         Duration::from_secs_f64(idle.dt),
                         &draw_rx,
-                        &mut buf
+                        &mut buffer.buf
                     );
                     println!("Idle: {}, cnt:{}", idle.dt, cnt);
             }
@@ -102,7 +124,7 @@ fn main() {
                 let start = Instant::now();
                 let texture: pw::G2dTexture = pw::Texture::from_image(
                             &mut texture_context,
-                            &buf,
+                            &buffer.buf,
                             &pw::TextureSettings::new()
                         ).unwrap();
                 let texture_time = Instant::now();
@@ -131,7 +153,7 @@ fn main() {
                         new_x, new_y, new_draw_tx.clone()
                     )}).unwrap();
                 }
-                buf = scale(buf, x, y, new_x, new_y);
+                buffer.scale(new_x, new_y);
                 x = new_x;
                 y = new_y;
             },
