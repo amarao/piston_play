@@ -48,6 +48,8 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
     cnt
 }
 
+
+
 fn main() {
     let mut x = 800;
     let mut y  = 600;
@@ -98,7 +100,7 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
                 let start = Instant::now();
-                let mut texture: pw::G2dTexture = pw::Texture::from_image(
+                let texture: pw::G2dTexture = pw::Texture::from_image(
                             &mut texture_context,
                             &buf,
                             &pw::TextureSettings::new()
@@ -106,16 +108,12 @@ fn main() {
                 let texture_time = Instant::now();
                 window.draw_2d(
                     &e,
-                    |context, graph_2d, device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
-                        // texture_context.encoder.flush(device);
-                        // println!("{:?}", pw::image);
+                    |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
                         pw::image(
                             &texture,
                             context.transform,
                             graph_2d
                         );
-                        let img = pw::image::Image::new();
-                        // image.draw(&texture, default_draw_state(), c.transform, gl);
                     }
                 );
                 let draw_time = Instant::now();
