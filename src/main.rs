@@ -10,9 +10,9 @@ use piston_play:: {Buffer};
 
 #[derive(Debug)]
 struct DrawCommand {
-    x: u32,
-    y: u32,
-    color: im::Rgba<u8>
+    x: [u32;32],
+    y: [u32;32],
+    color: [im::Rgba<u8>;32]
 }
 #[derive(Debug)]
 enum Command {
@@ -29,10 +29,12 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
     let mut cnt = 0;
     let start = Instant::now();
     while Instant::now() - start < allocated_time {
-        for _count in 0..1024 {
-            cnt +=1;
+        for _count in 0..32 {
             if let Ok(cmd) = rx.try_recv(){
-                buf.put_pixel(cmd.x,cmd.y,cmd.color);
+                for i in 0..32 {
+                    buf.put_pixel(cmd.x[i],cmd.y[i],cmd.color[i]);
+                    cnt +=1;
+                }
             }else{
                 break;
             }
@@ -71,7 +73,7 @@ fn main() {
         (||{
             let mut settings = pw::EventSettings::new();
             settings.ups = 2;
-            settings.max_fps = 6;
+            settings.max_fps = 60;
             settings
         })()
     );
@@ -155,14 +157,23 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
             },
             _ => {}
         }
-        let x = rng.gen_range(0,cur_x);
-        let y = rng.gen_range(0,cur_y);
-        let color = im::Rgba([
-            rng.gen_range(0,255),
-            rng.gen_range(0,255),
-            rng.gen_range(0,255),
-            rng.gen_range(0,255)]
-        );
+        let mut x: [u32; 32] = [0;32];
+        let mut y: [u32; 32] = [0;32];
+        let mut color: [im::Rgba<u8>;32] = [im::Rgba([0,0,0,0]); 32];
+        for  i in 0..32 {
+            x[i] = rng.gen_range(0,cur_x);
+        }
+        for  i in 0..32 {
+            y[i] = rng.gen_range(0,cur_y);
+        }
+        for i in 0..32 {
+            color[i] = im::Rgba([
+                rng.gen_range(0,255),
+                rng.gen_range(0,255),
+                rng.gen_range(0,255),
+                rng.gen_range(0,255)]
+            );
+        }
         if let Err(_) = draw_cmd.send(DrawCommand{x, y, color}){ continue ;}
     }
 }
