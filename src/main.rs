@@ -42,7 +42,6 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
 }
 
 
-
 fn main() {
     let mut x = 800;
     let mut y  = 600;
