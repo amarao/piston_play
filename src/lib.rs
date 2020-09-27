@@ -1,4 +1,7 @@
 use image as im;
+use piston_window;
+// use gfx_core;
+use gfx_device_gl;
 
 #[derive(Debug)]
 pub struct Buffer{
@@ -36,5 +39,18 @@ impl Buffer{
 
     pub fn buf_mut_ref(&mut self) -> &mut im::ImageBuffer<im::Rgba<u8>,Vec<u8>>{
         & mut self.buf
+    }
+
+    pub fn as_texture(
+        &self,
+        window: &mut piston_window::PistonWindow
+    ) -> piston_window::Texture<gfx_device_gl::Resources>
+    {
+        let mut texture_context = window.create_texture_context();
+        piston_window::Texture::from_image(
+                &mut texture_context,
+                &self.buf,
+                &piston_window::TextureSettings::new()
+            ).unwrap()
     }
 }

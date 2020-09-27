@@ -8,6 +8,7 @@ use std::sync::mpsc::{SyncSender, Sender, Receiver};
 use std::time::{Instant, Duration};
 use piston_play:: {Buffer};
 
+
 #[derive(Debug)]
 struct DrawCommand {
     x: u32,
@@ -24,6 +25,9 @@ struct ControlCommand{
     command: Command
 }
 
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>())
+}
 
 fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, buf: &mut im::RgbaImage) -> u64{
     let mut cnt = 0;
@@ -77,7 +81,7 @@ fn main() {
     );
 
 
-    let mut texture_context = window.create_texture_context();
+
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
@@ -92,20 +96,32 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
                 let start = Instant::now();
-                let texture: pw::G2dTexture = pw::Texture::from_image(
-                            &mut texture_context,
-                            buffer.buf_ref(),
-                            &pw::TextureSettings::new()
-                        ).unwrap();
+                let texture = buffer.as_texture(& mut window);
                 let texture_time = Instant::now();
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
+                        // println!("transform: {:?}", context.transform);
                         pw::image(
                             &texture,
                             context.transform,
                             graph_2d
                         );
+                        // pw::image(
+                        //     &texture,
+                        //     context.transform,
+                        //     graph_2d
+                        // );
+                        // pw::image(
+                        //     &texture,
+                        //     context.transform,
+                        //     graph_2d
+                        // );
+                        // pw::image(
+                        //     &texture,
+                        //     context.transform,
+                        //     graph_2d
+                        // );
                     }
                 );
                 let draw_time = Instant::now();

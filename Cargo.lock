@@ -875,6 +875,7 @@ dependencies = [
 name = "piston_play"
 version = "0.1.0"
 dependencies = [
+ "gfx_device_gl",
  "image",
  "itertools",
  "num_cpus",
