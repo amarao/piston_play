@@ -63,7 +63,7 @@ fn main() {
         });
     }
 
-    let mut window: pw::PistonWindow =
+    let mut window =
         pw::WindowSettings::new("test", (x, y))
         .exit_on_esc(true)
         .build()
@@ -90,7 +90,7 @@ fn main() {
                         &draw_rx,
                         buffer.buf_mut_ref()
                     );
-                    println!("Idle: {}, cnt:{}", idle.dt, cnt);
+                    println!("Idle: {}, cnt:{}, kpps: {}", idle.dt, cnt, cnt as f64/idle.dt/1000.0);
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
             }
