@@ -74,30 +74,32 @@ fn main() {
     let mut events = pw::Events::new(
         (||{
             let mut settings = pw::EventSettings::new();
-            settings.ups = 2;
-            settings.max_fps = 6;
+            settings.ups = 1;
+            settings.max_fps = 60;
             settings
         })()
     );
-
+    let mut cnt = 0;
+    let mut idle_time: f64 = 0.0;
+    let mut render_time: f64 = 0.0;
 
 
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                    let cnt = process_draw_commands(
+                    cnt += process_draw_commands(
                         Duration::from_secs_f64(idle.dt),
                         &draw_rx,
                         buffer.buf_mut_ref()
                     );
-                    println!("Idle: {}, cnt:{}, kpps: {}", idle.dt, cnt, cnt as f64/idle.dt/1000.0);
+                    idle_time += idle.dt;
+                    
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
-                let start = Instant::now();
+                let start_time = Instant::now();
                 let texture = buffer.as_texture(& mut window);
-                let texture_time = Instant::now();
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
@@ -125,10 +127,14 @@ fn main() {
                     }
                 );
                 let draw_time = Instant::now();
-                println!("Render: {:?}, {:?} -> {:?}", texture_time - start, draw_time -texture_time, Instant::now());
+                // println!("Render: {:?}, {:?} -> {:?}", texture_time - start, draw_time -texture_time, Instant::now());
+                render_time += (draw_time-start_time).as_secs_f64();
                 drop(texture);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
+                println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
+                cnt = 0;
+                idle_time = 0.0;
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
