@@ -104,9 +104,12 @@ fn main() {
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
                         
-                        // println!("transform: {:?}", context.reset().transform);
-                        // [[0.0025, 0.0, -1.0], [0.0, -0.0033333333333333335, 1.0]]
-                        let [xtr, ytr] = context.transform;
+                        println!("transform: {:?}", context.transform);
+                        // [
+                        //      [0.0025, 0.0, -1.0], 
+                        //      [0.0, -0.0033333333333333335, 1.0]
+                        //]
+                        let [[xscale, _, _], [_, y_scale, _]] = context.transform;
                         pw::image(
                             &texture,
                             // context.reset().transform,
@@ -114,9 +117,9 @@ fn main() {
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
                             // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
                             // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
-                            [
-                                [xtr[0]/2.0, xtr[1], 0.0],
-                                [ytr[0], ytr[1]/2.0, 0.0]
+                            [ //right-bottom corner
+                                [xscale/2.0, 0.0, 0.0],
+                                [0.0, y_scale/2.0, 0.0]
                             ],
                             graph_2d
                         );
@@ -125,9 +128,9 @@ fn main() {
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
                             // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 1.0]], //right-top corner
-                            [
-                                [xtr[0]/2.0, xtr[1], 0.0],
-                                [ytr[0], ytr[1]/2.0, ytr[2]]
+                            [//right-top corner
+                                [xscale/2.0, 0.0, 0.0],
+                                [0.0, y_scale/2.0, 1.0]
                             ],
                             // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
                             graph_2d
@@ -136,9 +139,9 @@ fn main() {
                             &texture,
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
-                            [
-                                [xtr[0]/2.0, xtr[1], xtr[2]],
-                                [ytr[0], ytr[1]/2.0, 0.0]
+                            [//left-bottom corner
+                                [xscale/2.0, 0.0, -1.0],
+                                [0.0, y_scale/2.0, 0.0]
                             ],
                             // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
                             // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
@@ -147,9 +150,9 @@ fn main() {
                         pw::image(
                             &texture,
                             // [[0.00125, 0.0, -1.0], [0.0, -0.001666666, 1.0]],  //left-top corner
-                            [
-                                [xtr[0]/2.0, xtr[1], xtr[2]],
-                                [ytr[0], ytr[1]/2.0, ytr[2]]
+                            [//left-top corner
+                                [xscale/2.0, 0.0, -1.0],
+                                [0.0, y_scale/2.0, 1.0]
                             ],
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
                             // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
