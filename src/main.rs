@@ -75,7 +75,7 @@ fn main() {
         (||{
             let mut settings = pw::EventSettings::new();
             settings.ups = 1;
-            settings.max_fps = 60;
+            settings.max_fps = 2;
             settings
         })()
     );
@@ -103,27 +103,60 @@ fn main() {
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
-                        // println!("transform: {:?}", context.transform);
+                        
+                        // println!("transform: {:?}", context.reset().transform);
+                        // [[0.0025, 0.0, -1.0], [0.0, -0.0033333333333333335, 1.0]]
+                        let [xtr, ytr] = context.transform;
                         pw::image(
                             &texture,
-                            context.transform,
+                            // context.reset().transform,
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
+                            [
+                                [xtr[0]/2.0, xtr[1], 0.0],
+                                [ytr[0], ytr[1]/2.0, 0.0]
+                            ],
                             graph_2d
                         );
-                        // pw::image(
-                        //     &texture,
-                        //     context.transform,
-                        //     graph_2d
-                        // );
-                        // pw::image(
-                        //     &texture,
-                        //     context.transform,
-                        //     graph_2d
-                        // );
-                        // pw::image(
-                        //     &texture,
-                        //     context.transform,
-                        //     graph_2d
-                        // );
+                        pw::image(
+                            &texture,
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 1.0]], //right-top corner
+                            [
+                                [xtr[0]/2.0, xtr[1], 0.0],
+                                [ytr[0], ytr[1]/2.0, ytr[2]]
+                            ],
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
+                            graph_2d
+                        );
+                        pw::image(
+                            &texture,
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
+                            [
+                                [xtr[0]/2.0, xtr[1], xtr[2]],
+                                [ytr[0], ytr[1]/2.0, 0.0]
+                            ],
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
+                            graph_2d
+                        );
+                        pw::image(
+                            &texture,
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.001666666, 1.0]],  //left-top corner
+                            [
+                                [xtr[0]/2.0, xtr[1], xtr[2]],
+                                [ytr[0], ytr[1]/2.0, ytr[2]]
+                            ],
+                            // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
+                            // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
+                            graph_2d
+                        );
+
                     }
                 );
                 let draw_time = Instant::now();
