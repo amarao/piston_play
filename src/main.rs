@@ -45,10 +45,13 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
     cnt
 }
 
+const MAX_THREADS:usize = 7;
+
 #[derive(Default, Debug)]
 struct ThreadCommands {
-    control_tx: [Option<Sender<ControlCommand>>;8],
-    draw_rx: [Option<Receiver<DrawCommand>>;8]
+    control_tx: [Option<Sender<ControlCommand>>;MAX_THREADS],
+    draw_rx: [Option<Receiver<DrawCommand>>;MAX_THREADS],
+    buf: [Option<piston_play::Buffer>;MAX_THREADS],
 }
 
 impl ThreadCommands{
@@ -70,10 +73,7 @@ impl ThreadCommands{
 fn main() {
     let mut x = 800;
     let mut y  = 600;
-    let cpus = num_cpus::get();
-
-    // 
-    // let mut control_txes: Vec<Sender<ControlCommand>> = Vec::new();
+    let cpus = std::cmp::min(num_cpus::get(), MAX_THREADS);
     let color_bases = [
         [255, 0, 0],
         [0, 255, 0],
@@ -231,6 +231,15 @@ fn main() {
     }
 }
 
+fn gen_color(rng: & mut rand::rngs::ThreadRng, range: u8) -> u8{
+    if range > 0 {
+        rng.gen_range(0, range)
+    }
+    else{
+        0
+    }
+}
+
 fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:u32, max_y:u32, color_base:[u8;3]){
     let mut cur_x = max_x;
     let mut cur_y = max_y;
@@ -251,13 +260,12 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
         }
         let x = rng.gen_range(0,cur_x);
         let y = rng.gen_range(0,cur_y);
-        let color_index = rng.gen_range(1,255);
         let color = im::Rgba([
-            color_base[0] / color_index,
-            color_base[0] / color_index,
-            color_base[0] / color_index,
-            rng.gen_range(0,255)]
-        );
+            gen_color(& mut rng, color_base[0]),
+            gen_color(& mut rng, color_base[1]),
+            gen_color(& mut rng, color_base[2]),
+            gen_color(& mut rng, 255)
+        ]);
         if let Err(_) = draw_cmd.send(DrawCommand{x, y, color}){ continue ;}
     }
 }
