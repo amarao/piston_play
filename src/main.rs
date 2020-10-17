@@ -45,24 +45,57 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
     cnt
 }
 
+#[derive(Default, Debug)]
+struct ThreadCommands {
+    control_tx: [Option<Sender<ControlCommand>>;8],
+    draw_rx: [Option<Receiver<DrawCommand>>;8]
+}
+
+impl ThreadCommands{
+    fn draw_rx_ref<'t>(&'t self, id: usize) -> &'t Receiver<DrawCommand>{
+        match &self.draw_rx[id]{
+            Some(x) => return &x,
+            None => panic!("Uninitialized draw_rx"),
+        }
+    }
+    fn command_tx_ref<'t>(&'t self, id: usize) -> &'t Sender<ControlCommand>{
+        match &self.control_tx[id]{
+            Some(x) => return &x,
+            None => panic!("Uninitialized draw_rx {}", id),
+        }
+    }
+
+}
 
 fn main() {
     let mut x = 800;
     let mut y  = 600;
     let cpus = num_cpus::get();
 
-    let (draw_tx, mut draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
-    let mut control_txes: Vec<Sender<ControlCommand>> = Vec::new();
-    for cpu in 1..cpus{
+    // 
+    // let mut control_txes: Vec<Sender<ControlCommand>> = Vec::new();
+    let color_bases = [
+        [255, 0, 0],
+        [0, 255, 0],
+        [255, 255, 0],
+        [0, 0,255],
+        [255, 0,255],
+        [0, 255,255],
+        [255, 255, 255]
+    ];
+    let mut control:ThreadCommands = Default::default();
+
+    for cpu in 0..cpus{
         let (control_tx, control_rx): (Sender<ControlCommand>, Receiver<ControlCommand>) = mpsc::channel();
-        control_txes.push(control_tx);
-        let thread_draw_tx = draw_tx.clone();
+        let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
+        control.control_tx[cpu] = Some(control_tx);
+        control.draw_rx[cpu] = Some(draw_rx);
         thread::spawn(move ||{
                 println!("Spawning thread for cpu {}", cpu);
-                calc(thread_draw_tx, control_rx, x, y)
+                calc(draw_tx, control_rx, x, y, color_bases[cpu])
         });
     }
-
+    println!("{:#?}", control);
     let mut window =
         pw::WindowSettings::new("test", (x, y))
         .exit_on_esc(true)
@@ -87,12 +120,14 @@ fn main() {
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                    cnt += process_draw_commands(
-                        Duration::from_secs_f64(idle.dt),
-                        &draw_rx,
-                        buffer.buf_mut_ref()
-                    );
-                    idle_time += idle.dt;
+                    for cpu in 0..cpus {
+                        cnt += process_draw_commands(
+                            Duration::from_secs_f64(idle.dt),
+                            control.draw_rx_ref(cpu),
+                            buffer.buf_mut_ref()
+                        );
+                        idle_time += idle.dt;
+                    }
                     
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
@@ -174,12 +209,13 @@ fn main() {
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
-                let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(128);
-                draw_rx = new_draw_rx;
-                for control_tx in &control_txes{
-                    control_tx.send(ControlCommand{command: Command::NewResolution(
-                        new_x, new_y, new_draw_tx.clone()
-                    )}).unwrap();
+                for cpu in 0..cpus{
+                    let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
+                    control.command_tx_ref(cpu).send(ControlCommand{command: Command::NewResolution(
+                            new_x, new_y, new_draw_tx
+                        )}).unwrap();
+                    control.draw_rx[cpu] = Some(new_draw_rx);
+                    println!("Redo, cpu {}. {:#?}", cpu, control);
                 }
                 buffer.scale(new_x, new_y);
                 x = new_x;
@@ -195,7 +231,7 @@ fn main() {
     }
 }
 
-fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:u32, max_y:u32){
+fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:u32, max_y:u32, color_base:[u8;3]){
     let mut cur_x = max_x;
     let mut cur_y = max_y;
     let mut draw_cmd = draw;
@@ -215,10 +251,11 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
         }
         let x = rng.gen_range(0,cur_x);
         let y = rng.gen_range(0,cur_y);
+        let color_index = rng.gen_range(1,255);
         let color = im::Rgba([
-            rng.gen_range(0,255),
-            rng.gen_range(0,255),
-            rng.gen_range(0,255),
+            color_base[0] / color_index,
+            color_base[0] / color_index,
+            color_base[0] / color_index,
             rng.gen_range(0,255)]
         );
         if let Err(_) = draw_cmd.send(DrawCommand{x, y, color}){ continue ;}
