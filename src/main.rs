@@ -90,6 +90,7 @@ fn main() {
         let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
         control.control_tx[cpu] = Some(control_tx);
         control.draw_rx[cpu] = Some(draw_rx);
+        control.buf[cpu] = Some(Buffer::new(x, y));
         thread::spawn(move ||{
                 println!("Spawning thread for cpu {}", cpu);
                 calc(draw_tx, control_rx, x, y, color_bases[cpu])
@@ -102,7 +103,7 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut buffer = Buffer::new(x, y);
+    // let mut buffer = Buffer::new(x, y);
 
     let mut events = pw::Events::new(
         (||{
@@ -124,7 +125,7 @@ fn main() {
                         cnt += process_draw_commands(
                             Duration::from_secs_f64(idle.dt),
                             control.draw_rx_ref(cpu),
-                            buffer.buf_mut_ref()
+                            (control.buf[cpu]).as_mut().unwrap().buf_mut_ref()
                         );
                         idle_time += idle.dt;
                     }
@@ -134,7 +135,10 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
                 let start_time = Instant::now();
-                let texture = buffer.as_texture(& mut window);
+                let texture0 = control.buf[0].as_ref().unwrap().as_texture(& mut window);
+                let texture1 = control.buf[1].as_ref().unwrap().as_texture(& mut window);
+                let texture2 = control.buf[2].as_ref().unwrap().as_texture(& mut window);
+                let texture3 = control.buf[3].as_ref().unwrap().as_texture(& mut window);
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
@@ -146,7 +150,7 @@ fn main() {
                         //]
                         let [[xscale, _, _], [_, y_scale, _]] = context.transform;
                         pw::image(
-                            &texture,
+                            &texture0,
                             // context.reset().transform,
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
@@ -159,7 +163,7 @@ fn main() {
                             graph_2d
                         );
                         pw::image(
-                            &texture,
+                            &texture1,
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
                             // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 1.0]], //right-top corner
@@ -171,7 +175,7 @@ fn main() {
                             graph_2d
                         );
                         pw::image(
-                            &texture,
+                            &texture2,
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                             // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
                             [//left-bottom corner
@@ -183,7 +187,7 @@ fn main() {
                             graph_2d
                         );
                         pw::image(
-                            &texture,
+                            &texture3,
                             // [[0.00125, 0.0, -1.0], [0.0, -0.001666666, 1.0]],  //left-top corner
                             [//left-top corner
                                 [xscale/2.0, 0.0, -1.0],
@@ -200,7 +204,7 @@ fn main() {
                 let draw_time = Instant::now();
                 // println!("Render: {:?}, {:?} -> {:?}", texture_time - start, draw_time -texture_time, Instant::now());
                 render_time += (draw_time-start_time).as_secs_f64();
-                drop(texture);
+                // drop(texture);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
                 println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
@@ -215,9 +219,10 @@ fn main() {
                             new_x, new_y, new_draw_tx
                         )}).unwrap();
                     control.draw_rx[cpu] = Some(new_draw_rx);
-                    println!("Redo, cpu {}. {:#?}", cpu, control);
+                    control.buf[cpu].as_mut().unwrap().scale(new_x, new_y);
+                    // println!("Redo, cpu {}. {:#?}", cpu, control);
                 }
-                buffer.scale(new_x, new_y);
+
                 x = new_x;
                 y = new_y;
             },
