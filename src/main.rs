@@ -96,7 +96,7 @@ fn main() {
                 calc(draw_tx, control_rx, x, y, color_bases[cpu])
         });
     }
-    println!("{:#?}", control);
+    // println!("{:#?}", control);
     let mut window =
         pw::WindowSettings::new("test", (x, y))
         .exit_on_esc(true)
@@ -124,7 +124,7 @@ fn main() {
                     for cpu in 0..cpus {
                         cnt += process_draw_commands(
                             Duration::from_secs_f64(idle.dt),
-                            control.draw_rx_ref(cpu),
+                            control.draw_rx[cpu].as_ref().unwrap(),
                             (control.buf[cpu]).as_mut().unwrap().buf_mut_ref()
                         );
                         idle_time += idle.dt;
