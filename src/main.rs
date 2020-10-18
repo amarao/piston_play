@@ -25,10 +25,6 @@ struct ControlCommand{
     command: Command
 }
 
-fn print_type_of<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>())
-}
-
 fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, buf: &mut im::RgbaImage) -> u64{
     let mut cnt = 0;
     let start = Instant::now();
@@ -110,7 +106,6 @@ fn main() {
     );
     let mut cnt = 0;
     let mut idle_time: f64 = 0.0;
-    let mut render_time: f64 = 0.0;
 
 
     while let Some(e) = events.next(&mut window) {
@@ -129,7 +124,6 @@ fn main() {
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
-                let start_time = Instant::now();
                 let texture0 = control[0].buf.as_ref().unwrap().as_texture(& mut window);
                 let texture1 = control[1].buf.as_ref().unwrap().as_texture(& mut window);
                 let texture2 = control[2].buf.as_ref().unwrap().as_texture(& mut window);
@@ -196,9 +190,7 @@ fn main() {
 
                     }
                 );
-                let draw_time = Instant::now();
                 // println!("Render: {:?}, {:?} -> {:?}", texture_time - start, draw_time -texture_time, Instant::now());
-                render_time += (draw_time-start_time).as_secs_f64();
                 // drop(texture);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
