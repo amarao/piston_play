@@ -49,26 +49,21 @@ const MAX_THREADS:usize = 7;
 
 #[derive(Default, Debug)]
 struct ThreadCommands {
-    control_tx: [Option<Sender<ControlCommand>>;MAX_THREADS],
-    draw_rx: [Option<Receiver<DrawCommand>>;MAX_THREADS],
-    buf: [Option<piston_play::Buffer>;MAX_THREADS],
+    control_tx: Option<Sender<ControlCommand>>,
+    draw_rx: Option<Receiver<DrawCommand>>,
+    buf: Option<piston_play::Buffer>
 }
 
-impl ThreadCommands{
-    fn draw_rx_ref<'t>(&'t self, id: usize) -> &'t Receiver<DrawCommand>{
-        match &self.draw_rx[id]{
-            Some(x) => return &x,
-            None => panic!("Uninitialized draw_rx"),
-        }
-    }
-    fn command_tx_ref<'t>(&'t self, id: usize) -> &'t Sender<ControlCommand>{
-        match &self.control_tx[id]{
-            Some(x) => return &x,
-            None => panic!("Uninitialized draw_rx {}", id),
-        }
-    }
+// impl ThreadCommands{
 
-}
+//     fn command_tx_ref<'t>(&'t self, id: usize) -> &'t Sender<ControlCommand>{
+//         match &self.control_tx[id]{
+//             Some(x) => return &x,
+//             None => panic!("Uninitialized draw_rx {}", id),
+//         }
+//     }
+
+// }
 
 fn main() {
     let mut x = 800;
@@ -83,14 +78,14 @@ fn main() {
         [0, 255,255],
         [255, 255, 255]
     ];
-    let mut control:ThreadCommands = Default::default();
+    let mut control:[ThreadCommands;MAX_THREADS] = Default::default();
 
     for cpu in 0..cpus{
         let (control_tx, control_rx): (Sender<ControlCommand>, Receiver<ControlCommand>) = mpsc::channel();
-        let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
-        control.control_tx[cpu] = Some(control_tx);
-        control.draw_rx[cpu] = Some(draw_rx);
-        control.buf[cpu] = Some(Buffer::new(x, y));
+        let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(16);
+        control[cpu].control_tx = Some(control_tx);
+        control[cpu].draw_rx = Some(draw_rx);
+        control[cpu].buf = Some(Buffer::new(x, y));
         thread::spawn(move ||{
                 println!("Spawning thread for cpu {}", cpu);
                 calc(draw_tx, control_rx, x, y, color_bases[cpu])
@@ -124,8 +119,8 @@ fn main() {
                     for cpu in 0..cpus {
                         cnt += process_draw_commands(
                             Duration::from_secs_f64(idle.dt),
-                            control.draw_rx[cpu].as_ref().unwrap(),
-                            (control.buf[cpu]).as_mut().unwrap().buf_mut_ref()
+                            control[cpu].draw_rx.as_ref().unwrap(),
+                            control[cpu].buf.as_mut().unwrap().buf_mut_ref()
                         );
                         idle_time += idle.dt;
                     }
@@ -135,10 +130,10 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
                 let start_time = Instant::now();
-                let texture0 = control.buf[0].as_ref().unwrap().as_texture(& mut window);
-                let texture1 = control.buf[1].as_ref().unwrap().as_texture(& mut window);
-                let texture2 = control.buf[2].as_ref().unwrap().as_texture(& mut window);
-                let texture3 = control.buf[3].as_ref().unwrap().as_texture(& mut window);
+                let texture0 = control[0].buf.as_ref().unwrap().as_texture(& mut window);
+                let texture1 = control[1].buf.as_ref().unwrap().as_texture(& mut window);
+                let texture2 = control[2].buf.as_ref().unwrap().as_texture(& mut window);
+                let texture3 = control[3].buf.as_ref().unwrap().as_texture(& mut window);
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
@@ -215,11 +210,11 @@ fn main() {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
                 for cpu in 0..cpus{
                     let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
-                    control.command_tx_ref(cpu).send(ControlCommand{command: Command::NewResolution(
+                    control[cpu].control_tx.as_ref().unwrap().send(ControlCommand{command: Command::NewResolution(
                             new_x, new_y, new_draw_tx
                         )}).unwrap();
-                    control.draw_rx[cpu] = Some(new_draw_rx);
-                    control.buf[cpu].as_mut().unwrap().scale(new_x, new_y);
+                    control[cpu].draw_rx = Some(new_draw_rx);
+                    control[cpu].buf.as_mut().unwrap().scale(new_x, new_y);
                     // println!("Redo, cpu {}. {:#?}", cpu, control);
                 }
 

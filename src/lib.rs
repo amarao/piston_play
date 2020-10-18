@@ -53,4 +53,12 @@ impl Buffer{
                 &piston_window::TextureSettings::new()
             ).unwrap()
     }
+
+    pub fn clone(&self) -> Self{
+        Buffer{
+            x: self.x,
+            y: self.y,
+            buf: self.buf.clone()
+        }
+    }
 }
