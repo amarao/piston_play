@@ -50,23 +50,6 @@ struct ThreadCommands {
     buf: Option<piston_play::Buffer>
 }
 
-fn span<T>(max_cpu: u32, cpu: u32, interval:T)-> [T;2]
-    where
-        T: From<u32> + std::ops::Div + std::ops::Mul + std::ops::Sub + std::ops::AddAssign,
-        T:From<<T as std::ops::Div>::Output>,
-        T:From<<T as std::ops::Sub>::Output>,
-        T: std::ops::Mul<Output = T>,
-        T: Copy
-    {
-    assert!(cpu < max_cpu); 
-    let mut step = T::from(interval / T::from(max_cpu));
-    let start = T::from(T::from(step) * T::from(cpu));
-    if cpu -1  == max_cpu { // if we can't divide by equal parts, last one is the biggest
-        step += T::from(interval - T::from(step) * T::from(max_cpu));
-    }
-    return [start, step];
-}
-
 fn main() {
     let mut x = 800;
     let mut y  = 600;
@@ -87,10 +70,10 @@ fn main() {
         let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(16);
         control[cpu].control_tx = Some(control_tx);
         control[cpu].draw_rx = Some(draw_rx);
-        control[cpu].buf = Some(Buffer::new(x, y/4));
+        control[cpu].buf = Some(Buffer::new(x, y/cpus as u32));
         thread::spawn(move ||{
                 println!("Spawning thread for cpu {}", cpu);
-                calc(draw_tx, control_rx, x, y/4, color_bases[cpu])
+                calc(draw_tx, control_rx, x, y/cpus as u32, color_bases[cpu])
         });
     }
     let mut window =
@@ -103,7 +86,7 @@ fn main() {
         (||{
             let mut settings = pw::EventSettings::new();
             settings.ups = 1;
-            settings.max_fps = 2;
+            settings.max_fps = 20;
             settings
         })()
     );
@@ -131,28 +114,19 @@ fn main() {
                 for cpu in 0..cpus {
                     let texture = control[cpu].buf.as_ref().unwrap().as_texture(& mut window);
                     textures.push(texture);
-                // let texture1 = control[1].buf.as_ref().unwrap().as_texture(& mut window);
-                // let texture2 = control[2].buf.as_ref().unwrap().as_texture(& mut window);
-                // let texture3 = control[3].buf.as_ref().unwrap().as_texture(& mut window);
                 }
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
                         
-                        println!("transform: {:?}", context.transform);
+                        // println!("transform: {:?}", context.transform);
                         // [
                         //      [0.0025, 0.0, -1.0],       ?, ? , ?
                         //      [0.0, -0.0033333333333333335, 1.0]  (some rotation),  Y-scale, Y offset (top is 1.0, bottom is -1)
                         //]
                         let mut transform = context.transform;
-                        println!("transform: {:?}", transform);
-                        
-                        // transform[1][2] = 1.0;
-                        // transform[1][1] = transform[1][1]/2.0;
-                        let pos = [1.0, 0.5, 0.0, -0.5];
-                        // transform[1][1] = transform[1][1]/4.0;
                         for cpu in 0..cpus {
-                            transform[1][2] = pos[cpu];
+                            transform[1][2] = 1.0 - 2.0 * cpu as f64 / cpus as f64 ;
                             pw::image(
                                 &textures.pop().unwrap(),
                                 // context.reset().transform,
@@ -164,45 +138,8 @@ fn main() {
                                 graph_2d
                             );
                         }
-                        // pw::image(
-                        //     &texture1,
-                        //     // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
-                        //     // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
-                        //     // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 1.0]], //right-top corner
-
-                        //     // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
-                        //     transform,
-                        //     graph_2d
-                        // );
-                        // pw::image(
-                        //     &texture2,
-                        //     // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
-                        //     // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
-                        //     [//left-bottom corner
-                        //         [xscale/2.0, 0.0, -1.0],
-                        //         [0.0, y_scale/2.0, 0.0]
-                        //     ],
-                        //     // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
-                        //     // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
-                        //     graph_2d
-                        // );
-                        // pw::image(
-                        //     &texture3,
-                        //     // [[0.00125, 0.0, -1.0], [0.0, -0.001666666, 1.0]],  //left-top corner
-                        //     [//left-top corner
-                        //         [xscale/2.0, 0.0, -1.0],
-                        //         [0.0, y_scale/2.0, 1.0]
-                        //     ],
-                        //     // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
-                        //     // [[0.00125, 0.0, 0.0], [0.0, -0.0016, 1.0]], //right-top corner
-                        //     // [[0.00125, 0.0, 0.0], [0.0, -0.00166666, 0.0]], //right-bottom corner
-                        //     graph_2d
-                        // );
-
                     }
                 );
-                // println!("Render: {:?}, {:?} -> {:?}", texture_time - start, draw_time -texture_time, Instant::now());
-                // drop(texture);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
                 println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
@@ -214,11 +151,10 @@ fn main() {
                 for cpu in 0..cpus{
                     let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
                     control[cpu].control_tx.as_ref().unwrap().send(ControlCommand{command: Command::NewResolution(
-                            new_x, new_y/4, new_draw_tx
+                            new_x, new_y/cpus as u32, new_draw_tx
                         )}).unwrap();
                     control[cpu].draw_rx = Some(new_draw_rx);
-                    control[cpu].buf.as_mut().unwrap().scale(new_x, new_y/4);
-                    // println!("Redo, cpu {}. {:#?}", cpu, control);
+                    control[cpu].buf.as_mut().unwrap().scale(new_x, new_y/cpus as u32);
                 }
 
                 x = new_x;

@@ -46,7 +46,7 @@ impl Buffer{
         window: &mut piston_window::PistonWindow
     ) -> piston_window::Texture<gfx_device_gl::Resources>
     {
-        println!("buf x:{}, y: {}", self.x, self.y);
+        // println!("buf x:{}, y: {}", self.x, self.y);
         let mut texture_context = window.create_texture_context();
         piston_window::Texture::from_image(
                 &mut texture_context,
