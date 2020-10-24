@@ -87,10 +87,10 @@ fn main() {
         let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(16);
         control[cpu].control_tx = Some(control_tx);
         control[cpu].draw_rx = Some(draw_rx);
-        control[cpu].buf = Some(Buffer::new(x, y));
+        control[cpu].buf = Some(Buffer::new(x, y/4));
         thread::spawn(move ||{
                 println!("Spawning thread for cpu {}", cpu);
-                calc(draw_tx, control_rx, x, span(cpus as u32, cpu as u32, y)[1], color_bases[cpu])
+                calc(draw_tx, control_rx, x, y/4, color_bases[cpu])
         });
     }
     let mut window =
@@ -128,9 +128,9 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
                 let texture = control[0].buf.as_ref().unwrap().as_texture(& mut window);
-                let texture1 = control[1].buf.as_ref().unwrap().as_texture(& mut window);
-                let texture2 = control[2].buf.as_ref().unwrap().as_texture(& mut window);
-                let texture3 = control[3].buf.as_ref().unwrap().as_texture(& mut window);
+                // let texture1 = control[1].buf.as_ref().unwrap().as_texture(& mut window);
+                // let texture2 = control[2].buf.as_ref().unwrap().as_texture(& mut window);
+                // let texture3 = control[3].buf.as_ref().unwrap().as_texture(& mut window);
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
@@ -141,10 +141,14 @@ fn main() {
                         //      [0.0, -0.0033333333333333335, 1.0]  (some rotation),  Y-scale, Y offset (top is 1.0, bottom is -1)
                         //]
                         let mut transform = context.transform;
+                        println!("transform: {:?}", transform);
+                        
                         // transform[1][2] = 1.0;
                         // transform[1][1] = transform[1][1]/2.0;
+                        let pos = [1.0, 0.5, 0.0, -0.5];
+                        // transform[1][1] = transform[1][1]/4.0;
                         for cpu in 0..cpus {
-                            // transform[1][2] = 
+                            transform[1][2] = pos[cpu];
                             pw::image(
                                 &texture,
                                 // context.reset().transform,
@@ -206,10 +210,10 @@ fn main() {
                 for cpu in 0..cpus{
                     let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
                     control[cpu].control_tx.as_ref().unwrap().send(ControlCommand{command: Command::NewResolution(
-                            new_x, span(cpus as u32, cpu as u32, new_y)[1], new_draw_tx
+                            new_x, new_y/4, new_draw_tx
                         )}).unwrap();
                     control[cpu].draw_rx = Some(new_draw_rx);
-                    control[cpu].buf.as_mut().unwrap().scale(new_x, new_y);
+                    control[cpu].buf.as_mut().unwrap().scale(new_x, new_y/4);
                     // println!("Redo, cpu {}. {:#?}", cpu, control);
                 }
 
