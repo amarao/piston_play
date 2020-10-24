@@ -8,13 +8,15 @@ use std::sync::mpsc::{SyncSender, Sender, Receiver};
 use std::time::{Instant, Duration};
 use piston_play:: {Buffer};
 
-
+const DRAW_BATCH_SIZE:usize = 255;
 #[derive(Debug)]
 struct DrawCommand {
-    x: u32,
-    y: u32,
-    color: im::Rgba<u8>
+    num: usize,
+    x: [u32;DRAW_BATCH_SIZE],
+    y: [u32;DRAW_BATCH_SIZE],
+    color: [im::Rgba<u8>; DRAW_BATCH_SIZE]
 }
+
 #[derive(Debug)]
 enum Command {
     NewResolution(u32, u32, SyncSender<DrawCommand>)
@@ -30,9 +32,11 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
     let start = Instant::now();
     while Instant::now() - start < allocated_time {
         for _count in 0..1024 {
-            cnt +=1;
             if let Ok(cmd) = rx.try_recv(){
-                buf.put_pixel(cmd.x,cmd.y,cmd.color);
+                cnt += cmd.num as u64;
+                for i in 0..cmd.num {
+                    buf.put_pixel(cmd.x[i],cmd.y[i],cmd.color[i]);
+                }
             }else{
                 break;
             }
@@ -42,6 +46,7 @@ fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, 
 }
 
 const MAX_THREADS:usize = 7;
+
 
 #[derive(Default, Debug)]
 struct ThreadCommands {
@@ -86,7 +91,7 @@ fn main() {
         (||{
             let mut settings = pw::EventSettings::new();
             settings.ups = 1;
-            settings.max_fps = 20;
+            settings.max_fps = 50;
             settings
         })()
     );
@@ -198,14 +203,23 @@ fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:
             },
             _ => {}
         }
-        let x = rng.gen_range(0,cur_x);
-        let y = rng.gen_range(0,cur_y);
-        let color = im::Rgba([
-            gen_color(& mut rng, color_base[0]),
-            gen_color(& mut rng, color_base[1]),
-            gen_color(& mut rng, color_base[2]),
-            gen_color(& mut rng, 255)
-        ]);
-        if let Err(_) = draw_cmd.send(DrawCommand{x, y, color}){ continue ;}
+        let mut draw: DrawCommand = DrawCommand{
+            num:rng.gen_range(1, DRAW_BATCH_SIZE),
+            x:[0;DRAW_BATCH_SIZE],
+            y:[0;DRAW_BATCH_SIZE],
+            color:[im::Rgba([0,0,0,0]);DRAW_BATCH_SIZE]
+
+        };
+        for i in 0..draw.num {
+            draw.x[i] = rng.gen_range(0,cur_x);
+            draw.y[i] = rng.gen_range(0,cur_y);
+            draw.color[i] = im::Rgba([
+                gen_color(& mut rng, color_base[0]),
+                gen_color(& mut rng, color_base[1]),
+                gen_color(& mut rng, color_base[2]),
+                gen_color(& mut rng, 255)
+            ]);
+        }
+        if let Err(_) = draw_cmd.send(draw){ continue ;}
     }
 }
