@@ -127,10 +127,14 @@ fn main() {
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
-                let texture = control[0].buf.as_ref().unwrap().as_texture(& mut window);
+                let mut textures: Vec<piston_window::Texture<gfx_device_gl::Resources>> = Vec::new();
+                for cpu in 0..cpus {
+                    let texture = control[cpu].buf.as_ref().unwrap().as_texture(& mut window);
+                    textures.push(texture);
                 // let texture1 = control[1].buf.as_ref().unwrap().as_texture(& mut window);
                 // let texture2 = control[2].buf.as_ref().unwrap().as_texture(& mut window);
                 // let texture3 = control[3].buf.as_ref().unwrap().as_texture(& mut window);
+                }
                 window.draw_2d(
                     &e,
                     |context, graph_2d, _device| { //graph_2d -> https://docs.piston.rs/piston_window/gfx_graphics/struct.GfxGraphics.html
@@ -150,7 +154,7 @@ fn main() {
                         for cpu in 0..cpus {
                             transform[1][2] = pos[cpu];
                             pw::image(
-                                &texture,
+                                &textures.pop().unwrap(),
                                 // context.reset().transform,
                                 // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                                 // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
