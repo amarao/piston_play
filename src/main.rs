@@ -5,53 +5,50 @@ use rand::Rng;
 use std::thread;
 use std::sync::mpsc;
 use std::sync::mpsc::{SyncSender, Sender, Receiver};
-use std::time::{Instant, Duration};
+// use std::time::{Instant, Duration};
 use piston_play:: {Buffer};
 
-const DRAW_BATCH_SIZE:usize = 255;
-#[derive(Debug)]
-struct DrawCommand {
-    num: usize,
-    x: [u32;DRAW_BATCH_SIZE],
-    y: [u32;DRAW_BATCH_SIZE],
-    color: [im::Rgba<u8>; DRAW_BATCH_SIZE]
-}
+// const DRAW_BATCH_SIZE:usize = 255;
+// #[derive(Debug)]
+// struct DrawCommand {
+//     num: usize,
+//     x: [u32;DRAW_BATCH_SIZE],
+//     y: [u32;DRAW_BATCH_SIZE],
+//     color: [im::Rgba<u8>; DRAW_BATCH_SIZE]
+// }
+
 
 #[derive(Debug)]
 enum Command {
-    NewResolution(u32, u32, SyncSender<DrawCommand>)
+    NewResolution(u32, u32, SyncSender<piston_play::Buffer>),
+    NeedUpdate()
 }
 
- #[derive(Debug)]
-struct ControlCommand{
-    command: Command
-}
 
-fn process_draw_commands (allocated_time: Duration, rx: &Receiver<DrawCommand>, buf: &mut im::RgbaImage) -> u64{
-    let mut cnt = 0;
-    let start = Instant::now();
-    while Instant::now() - start < allocated_time {
-        for _count in 0..1024 {
-            if let Ok(cmd) = rx.try_recv(){
-                cnt += cmd.num as u64;
-                for i in 0..cmd.num {
-                    buf.put_pixel(cmd.x[i],cmd.y[i],cmd.color[i]);
-                }
-            }else{
-                break;
-            }
-        }
-    }
-    cnt
-}
+// fn process_draw_commands (allocated_time: Duration, rx: &Receiver<Command>, buf: &mut im::RgbaImage) -> u64{
+//     let start = Instant::now();
+//     while Instant::now() - start < allocated_time {
+//         for _count in 0..1024 {
+//             if let Ok(cmd) = rx.try_recv(){
+//                 cnt += cmd.num as u64;
+//                 for i in 0..cmd.num {
+//                     buf.put_pixel(cmd.x[i],cmd.y[i],cmd.color[i]);
+//                 }
+//             }else{
+//                 break;
+//             }
+//         }
+//     }
+//     cnt
+// }
 
 const MAX_THREADS:usize = 7;
 
 
 #[derive(Default, Debug)]
 struct ThreadCommands {
-    control_tx: Option<Sender<ControlCommand>>,
-    draw_rx: Option<Receiver<DrawCommand>>,
+    control_tx: Option<Sender<Command>>,
+    draw_rx: Option<Receiver<piston_play::Buffer>>,
     buf: Option<piston_play::Buffer>
 }
 
@@ -71,8 +68,8 @@ fn main() {
     let mut control:[ThreadCommands;MAX_THREADS] = Default::default();
 
     for cpu in 0..cpus{
-        let (control_tx, control_rx): (Sender<ControlCommand>, Receiver<ControlCommand>) = mpsc::channel();
-        let (draw_tx, draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(16);
+        let (control_tx, control_rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
+        let (draw_tx, draw_rx): (SyncSender<piston_play::Buffer>, Receiver<piston_play::Buffer>) = mpsc::sync_channel(1);
         control[cpu].control_tx = Some(control_tx);
         control[cpu].draw_rx = Some(draw_rx);
         control[cpu].buf = Some(Buffer::new(x, y/cpus as u32));
@@ -95,7 +92,7 @@ fn main() {
             settings
         })()
     );
-    let mut cnt = 0;
+    // let mut cnt = 0;
     let mut idle_time: f64 = 0.0;
 
 
@@ -103,11 +100,12 @@ fn main() {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
                     for cpu in 0..cpus {
-                        cnt += process_draw_commands(
-                            Duration::from_secs_f64(idle.dt),
-                            control[cpu].draw_rx.as_ref().unwrap(),
-                            control[cpu].buf.as_mut().unwrap().buf_mut_ref()
-                        );
+                        control[cpu].buf = Some(control[cpu].draw_rx.as_mut().unwrap().recv().unwrap());
+                        // cnt += process_draw_commands(
+                        //     Duration::from_secs_f64(idle.dt),
+                        //     control[cpu].draw_rx.as_ref().unwrap(),
+                        //     control[cpu].buf.as_mut().unwrap().buf_mut_ref()
+                        // );
                         idle_time += idle.dt;
                     }
                     
@@ -133,7 +131,7 @@ fn main() {
                         for cpu in 0..cpus {
                             transform[1][2] = 1.0 - 2.0 * cpu as f64 / cpus as f64 ;
                             pw::image(
-                                &textures.pop().unwrap(),
+                                &textures[cpu],
                                 // context.reset().transform,
                                 // [[0.00125, 0.0, -1.0], [0.0, -0.0016, 1.0]],  //left-top corner
                                 // [[0.00125, 0.0, -1.0], [0.0, -0.0016666, 0.0]], //left-bottom corner
@@ -144,20 +142,24 @@ fn main() {
                             );
                         }
                     }
+                    
                 );
+                for cpu in 0..cpus{
+                    control[cpu].control_tx.as_ref().unwrap().send(Command::NeedUpdate()).unwrap();
+                    // drop(textures.pop();
+                }
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
-                println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
-                cnt = 0;
+                // println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
                 idle_time = 0.0;
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
                 for cpu in 0..cpus{
-                    let (new_draw_tx, new_draw_rx): (SyncSender<DrawCommand>, Receiver<DrawCommand>) = mpsc::sync_channel(1024);
-                    control[cpu].control_tx.as_ref().unwrap().send(ControlCommand{command: Command::NewResolution(
+                    let (new_draw_tx, new_draw_rx): (SyncSender<piston_play::Buffer>, Receiver<piston_play::Buffer>) = mpsc::sync_channel(1024);
+                    control[cpu].control_tx.as_ref().unwrap().send(Command::NewResolution(
                             new_x, new_y/cpus as u32, new_draw_tx
-                        )}).unwrap();
+                        )).unwrap();
                     control[cpu].draw_rx = Some(new_draw_rx);
                     control[cpu].buf.as_mut().unwrap().scale(new_x, new_y/cpus as u32);
                 }
@@ -184,42 +186,40 @@ fn gen_color(rng: & mut rand::rngs::ThreadRng, range: u8) -> u8{
     }
 }
 
-fn calc(draw: SyncSender<DrawCommand>, command: Receiver<ControlCommand>, max_x:u32, max_y:u32, color_base:[u8;3]){
+fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, max_x:u32, max_y:u32, color_base:[u8;3]){
     let mut cur_x = max_x;
     let mut cur_y = max_y;
-    let mut draw_cmd = draw;
     let mut rng = rand::thread_rng();
     println!("new thread: {}, {}", max_x, max_y);
+    let mut buf = piston_play::Buffer::new(max_x, max_y);
     loop{
         match command.try_recv() {
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 return;
             },
-            Ok(ControlCommand{command: Command::NewResolution(new_x, new_y, new_draw)}) => {
+            Ok(Command::NewResolution(new_x, new_y, new_draw)) => {
                     println!("new thread resolution:{}x{}", new_x, new_y);
                     cur_x = new_x;
                     cur_y = new_y;
-                    draw_cmd = new_draw;
+                    buf.scale(new_x, new_y);
+                    draw = new_draw;
             },
-            _ => {}
-        }
-        let mut draw: DrawCommand = DrawCommand{
-            num:rng.gen_range(1, DRAW_BATCH_SIZE),
-            x:[0;DRAW_BATCH_SIZE],
-            y:[0;DRAW_BATCH_SIZE],
-            color:[im::Rgba([0,0,0,0]);DRAW_BATCH_SIZE]
+            Ok(Command::NeedUpdate()) => {
+                draw.send(buf.clone()).unwrap();
+            }
+            Err(_empty) => {
+                buf.put_pixel(
+                    rng.gen_range(0, cur_x),
+                    rng.gen_range(0, cur_y),
+                    im::Rgba([
+                        gen_color(&mut rng, color_base[0]),
+                        gen_color(&mut rng, color_base[1]),
+                        gen_color(&mut rng, color_base[2]),
+                        gen_color(&mut rng, 255),
 
-        };
-        for i in 0..draw.num {
-            draw.x[i] = rng.gen_range(0,cur_x);
-            draw.y[i] = rng.gen_range(0,cur_y);
-            draw.color[i] = im::Rgba([
-                gen_color(& mut rng, color_base[0]),
-                gen_color(& mut rng, color_base[1]),
-                gen_color(& mut rng, color_base[2]),
-                gen_color(& mut rng, 255)
-            ]);
+                    ])
+                );
+            }
         }
-        if let Err(_) = draw_cmd.send(draw){ continue ;}
     }
 }

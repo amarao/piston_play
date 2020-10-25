@@ -18,7 +18,10 @@ impl Buffer{
             buf: im::ImageBuffer::from_fn(x, y, |_, __| { im::Rgba([255,255,255,255]) })
         }
     }
-
+    
+    pub fn put_pixel(&mut self, x: u32, y:u32, color: im::Rgba<u8>){
+        self.buf.put_pixel(x, y, color);
+    }
 
     pub fn scale(&mut self, new_x:u32, new_y:u32){
         let new_buf:im::ImageBuffer<im::Rgba<u8>,Vec<u8>> = im::ImageBuffer::from_fn(new_x, new_y, |x, y| {
