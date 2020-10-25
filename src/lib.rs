@@ -65,4 +65,8 @@ impl Buffer{
             buf: self.buf.clone()
         }
     }
+    pub fn replace(self, other: Self) -> Self{
+        drop(self);
+        return other;
+    }
 }

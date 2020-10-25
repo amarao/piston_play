@@ -88,7 +88,7 @@ fn main() {
         (||{
             let mut settings = pw::EventSettings::new();
             settings.ups = 1;
-            settings.max_fps = 50;
+            settings.max_fps = 60;
             settings
         })()
     );
@@ -100,7 +100,7 @@ fn main() {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
                     for cpu in 0..cpus {
-                        control[cpu].buf = Some(control[cpu].draw_rx.as_mut().unwrap().recv().unwrap());
+                        control[cpu].buf.replace(control[cpu].draw_rx.as_mut().unwrap().recv().unwrap());
                         // cnt += process_draw_commands(
                         //     Duration::from_secs_f64(idle.dt),
                         //     control[cpu].draw_rx.as_ref().unwrap(),
@@ -146,7 +146,7 @@ fn main() {
                 );
                 for cpu in 0..cpus{
                     control[cpu].control_tx.as_ref().unwrap().send(Command::NeedUpdate()).unwrap();
-                    // drop(textures.pop();
+                    drop(textures.pop());
                 }
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
@@ -186,11 +186,15 @@ fn gen_color(rng: & mut rand::rngs::ThreadRng, range: u8) -> u8{
     }
 }
 
+
+
 fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, max_x:u32, max_y:u32, color_base:[u8;3]){
     let mut cur_x = max_x;
     let mut cur_y = max_y;
     let mut rng = rand::thread_rng();
-    println!("new thread: {}, {}", max_x, max_y);
+    let mut cnt: u64 = 0;
+    let mut start = std::time::Instant::now();
+    println!("new thread: {}x{}", max_x, max_y);
     let mut buf = piston_play::Buffer::new(max_x, max_y);
     loop{
         match command.try_recv() {
@@ -206,19 +210,38 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
             },
             Ok(Command::NeedUpdate()) => {
                 draw.send(buf.clone()).unwrap();
+                if start.elapsed().as_secs() >= 1 {
+                    println!("thread rate: {:.2} Mpps", cnt as f64 / start.elapsed().as_secs_f64()/1000.0/1000.0);
+                    start = std::time::Instant::now();
+                    cnt = 0;
+                }
             }
             Err(_empty) => {
-                buf.put_pixel(
-                    rng.gen_range(0, cur_x),
-                    rng.gen_range(0, cur_y),
-                    im::Rgba([
-                        gen_color(&mut rng, color_base[0]),
-                        gen_color(&mut rng, color_base[1]),
-                        gen_color(&mut rng, color_base[2]),
-                        gen_color(&mut rng, 255),
+                for _ in 0..1000 {
+                    cnt += 1;
+                    buf.put_pixel(
+                        (cnt % cur_x as u64) as u32,
+                        (cnt % cur_y as u64) as u32,
+                        im::Rgba([
+                            if color_base[0] > 0 { (cnt % color_base[0] as u64) as u8 } else {0},
+                            if color_base[1] > 0 { (cnt % color_base[1] as u64) as u8 } else {0},
+                            if color_base[2] > 0 { (cnt % color_base[2] as u64) as u8 } else {0},
+                            128,
 
-                    ])
-                );
+                        ])
+                    );
+                    // buf.put_pixel(
+                    //     rng.gen_range(0, cur_x),
+                    //     rng.gen_range(0, cur_y),
+                    //     im::Rgba([
+                    //         gen_color(&mut rng, color_base[0]),
+                    //         gen_color(&mut rng, color_base[1]),
+                    //         gen_color(&mut rng, color_base[2]),
+                    //         gen_color(&mut rng, 255),
+
+                    //     ])
+                    // );
+                }
             }
         }
     }
