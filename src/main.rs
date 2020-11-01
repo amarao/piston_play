@@ -52,6 +52,27 @@ struct ThreadCommands {
     buf: Option<piston_play::Buffer>
 }
 
+fn get_updates(cpus: usize, control:&mut [ThreadCommands;MAX_THREADS]){
+    for cpu in 0..cpus {
+        match control[cpu].draw_rx.as_mut().unwrap().try_recv(){
+            Ok(buf) =>{
+                control[cpu].buf.replace(buf);
+            }
+            Err(TryRecvError::Empty) => {print!("!");}
+            Err(TryRecvError::Disconnected) => {
+                println!("disconnected in draw");
+                continue;
+            }
+
+        }
+    }
+        // cnt += process_draw_commands(
+        //     Duration::from_secs_f64(idle.dt),
+        //     control[cpu].draw_rx.as_ref().unwrap(),
+        //     control[cpu].buf.as_mut().unwrap().buf_mut_ref()
+        // );
+}
+
 fn main() {
     let mut x = 800;
     let mut y  = 600;
@@ -87,41 +108,17 @@ fn main() {
     let mut events = pw::Events::new(
         (||{
             let mut settings = pw::EventSettings::new();
-            settings.ups = 1;
+            settings.ups = 60;
             settings.max_fps = 60;
             settings
         })()
     );
     // let mut cnt = 0;
-    let mut idle_time: f64 = 0.0;
 
 
     while let Some(e) = events.next(&mut window) {
         match e{
-            piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
-                    print!("I");
-                    for cpu in 0..cpus {
-                        match control[cpu].draw_rx.as_mut().unwrap().try_recv(){
-                            Ok(buf) =>{
-                                control[cpu].buf.replace(buf);
-                                print!("{}", cpu);
-                            }
-                            Err(TryRecvError::Empty) => {print!("!");}
-                            Err(TryRecvError::Disconnected) => {
-                                println!("disconnected in draw");
-                                continue;
-                            }
-
-                        }
-                        // cnt += process_draw_commands(
-                        //     Duration::from_secs_f64(idle.dt),
-                        //     control[cpu].draw_rx.as_ref().unwrap(),
-                        //     control[cpu].buf.as_mut().unwrap().buf_mut_ref()
-                        // );
-                        idle_time += idle.dt;
-                    }
-                    
-            }
+            piston::Event::Loop(piston::Loop::Idle(_)) => {},
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
                 for cpu in 0..cpus{
                     if let Err(_) = control[cpu].control_tx.as_ref().unwrap().try_send(Command::NeedUpdate()){
@@ -169,8 +166,7 @@ fn main() {
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
                 // println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
-                idle_time = 0.0;
-                println!(".");
+                get_updates(cpus, &mut control);
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
@@ -213,6 +209,7 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
     let mut rng = rand::thread_rng();
     let mut cnt: u64 = 0;
     let mut start = std::time::Instant::now();
+    let mut seed: u64 = 1;
     println!("new thread: {}x{}", max_x, max_y);
     let mut buf = piston_play::Buffer::new(max_x, max_y);
     loop{
@@ -240,15 +237,17 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
                 }
             }
             Err(_empty) => {
+                seed = rng.gen_range(0, 2<<30);
                 for _ in 0..1000 {
                     cnt += 1;
+                    let val = seed ^ cnt;
                     buf.put_pixel(
-                        (cnt % cur_x as u64) as u32,
-                        (cnt % cur_y as u64) as u32,
+                        (val % cur_x as u64) as u32,
+                        (val % cur_y as u64) as u32,
                         im::Rgba([
-                            if color_base[0] > 0 { (cnt % color_base[0] as u64) as u8 } else {0},
-                            if color_base[1] > 0 { (cnt % color_base[1] as u64) as u8 } else {0},
-                            if color_base[2] > 0 { (cnt % color_base[2] as u64) as u8 } else {0},
+                            if color_base[0] > 0 { (val % color_base[0] as u64) as u8 } else {0},
+                            if color_base[1] > 0 { (val % color_base[1] as u64) as u8 } else {0},
+                            if color_base[2] > 0 { (val % color_base[2] as u64) as u8 } else {0},
                             128,
 
                         ])
