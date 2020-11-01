@@ -4,7 +4,7 @@ use piston;
 use rand::Rng;
 use std::thread;
 use std::sync::mpsc;
-use std::sync::mpsc::{SyncSender, Sender, Receiver};
+use std::sync::mpsc::{SyncSender, Sender, Receiver, TryRecvError};
 // use std::time::{Instant, Duration};
 use piston_play:: {Buffer};
 
@@ -47,7 +47,7 @@ const MAX_THREADS:usize = 7;
 
 #[derive(Default, Debug)]
 struct ThreadCommands {
-    control_tx: Option<Sender<Command>>,
+    control_tx: Option<SyncSender<Command>>,
     draw_rx: Option<Receiver<piston_play::Buffer>>,
     buf: Option<piston_play::Buffer>
 }
@@ -68,7 +68,7 @@ fn main() {
     let mut control:[ThreadCommands;MAX_THREADS] = Default::default();
 
     for cpu in 0..cpus{
-        let (control_tx, control_rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
+        let (control_tx, control_rx): (SyncSender<Command>, Receiver<Command>) = mpsc::sync_channel(1);
         let (draw_tx, draw_rx): (SyncSender<piston_play::Buffer>, Receiver<piston_play::Buffer>) = mpsc::sync_channel(1);
         control[cpu].control_tx = Some(control_tx);
         control[cpu].draw_rx = Some(draw_rx);
@@ -100,7 +100,17 @@ fn main() {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
                     for cpu in 0..cpus {
-                        control[cpu].buf.replace(control[cpu].draw_rx.as_mut().unwrap().recv().unwrap());
+                        match control[cpu].draw_rx.as_mut().unwrap().try_recv(){
+                            Ok(buf) =>{
+                                control[cpu].buf.replace(buf);
+                            }
+                            Err(TryRecvError::Empty) => continue,
+                            Err(TryRecvError::Disconnected) => {
+                                println!("disconnected in draw");
+                                continue;
+                            }
+
+                        }
                         // cnt += process_draw_commands(
                         //     Duration::from_secs_f64(idle.dt),
                         //     control[cpu].draw_rx.as_ref().unwrap(),
@@ -145,7 +155,7 @@ fn main() {
                     
                 );
                 for cpu in 0..cpus{
-                    control[cpu].control_tx.as_ref().unwrap().send(Command::NeedUpdate()).unwrap();
+                    control[cpu].control_tx.as_ref().unwrap().try_send(Command::NeedUpdate());
                     drop(textures.pop());
                 }
             }
@@ -177,14 +187,14 @@ fn main() {
     }
 }
 
-fn gen_color(rng: & mut rand::rngs::ThreadRng, range: u8) -> u8{
-    if range > 0 {
-        rng.gen_range(0, range)
-    }
-    else{
-        0
-    }
-}
+// fn gen_color(rng: & mut rand::rngs::ThreadRng, range: u8) -> u8{
+//     if range > 0 {
+//         rng.gen_range(0, range)
+//     }
+//     else{
+//         0
+//     }
+// }
 
 
 
@@ -199,6 +209,7 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
     loop{
         match command.try_recv() {
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                println!("disconnected");
                 return;
             },
             Ok(Command::NewResolution(new_x, new_y, new_draw)) => {
@@ -209,7 +220,10 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
                     draw = new_draw;
             },
             Ok(Command::NeedUpdate()) => {
-                draw.send(buf.clone()).unwrap();
+                if let Err(_) = draw.send(buf.clone()){
+                    println!("oops");
+                    continue;
+                }
                 if start.elapsed().as_secs() >= 1 {
                     println!("thread rate: {:.2} Mpps", cnt as f64 / start.elapsed().as_secs_f64()/1000.0/1000.0);
                     start = std::time::Instant::now();
