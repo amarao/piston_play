@@ -121,13 +121,12 @@ fn main() {
             piston::Event::Loop(piston::Loop::Idle(_)) => {},
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
                 for cpu in 0..cpus{
-                    if let Err(_) = control[cpu].control_tx.as_ref().unwrap().try_send(Command::NeedUpdate()){
-                        println!("update request errorr");
+                    if let Err(err) = control[cpu].control_tx.as_ref().unwrap().try_send(Command::NeedUpdate()){
+                        println!("update request errorr: {}", err);
                     }
                 }
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
-                print!("*");
                 let mut textures: Vec<piston_window::Texture<gfx_device_gl::Resources>> = Vec::new();
                 for cpu in 0..cpus {
                     let texture = control[cpu].buf.as_ref().unwrap().as_texture(& mut window);
@@ -209,7 +208,7 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
     let mut rng = rand::thread_rng();
     let mut cnt: u64 = 0;
     let mut start = std::time::Instant::now();
-    let mut seed: u64 = 1;
+    let mut seed: u64 = rng.gen_range(0, 2<<30);
     println!("new thread: {}x{}", max_x, max_y);
     let mut buf = piston_play::Buffer::new(max_x, max_y);
     loop{
@@ -231,23 +230,22 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
                     continue;
                 }
                 if start.elapsed().as_secs() >= 1 {
-                    // println!("thread rate: {:.2} Mpps", cnt as f64 / start.elapsed().as_secs_f64()/1000.0/1000.0);
+                    println!("thread rate: {:.2} Mpps", cnt as f64 / start.elapsed().as_secs_f64()/1000.0/1000.0);
                     start = std::time::Instant::now();
                     cnt = 0;
                 }
             }
             Err(_empty) => {
-                seed = rng.gen_range(0, 2<<30);
+                // let mut val = seed ^ cnt;
                 for _ in 0..1000 {
                     cnt += 1;
-                    let val = seed ^ cnt;
                     buf.put_pixel(
-                        (val % cur_x as u64) as u32,
-                        (val % cur_y as u64) as u32,
+                        (cnt % cur_x as u64) as u32,
+                        (cnt % cur_y as u64) as u32,
                         im::Rgba([
-                            if color_base[0] > 0 { (val % color_base[0] as u64) as u8 } else {0},
-                            if color_base[1] > 0 { (val % color_base[1] as u64) as u8 } else {0},
-                            if color_base[2] > 0 { (val % color_base[2] as u64) as u8 } else {0},
+                            if color_base[0] > 0 { (cnt % color_base[0] as u64) as u8 } else {0},
+                            if color_base[1] > 0 { (cnt % color_base[1] as u64) as u8 } else {0},
+                            if color_base[2] > 0 { (cnt % color_base[2] as u64) as u8 } else {0},
                             128,
 
                         ])
