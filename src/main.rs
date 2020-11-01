@@ -99,12 +99,14 @@ fn main() {
     while let Some(e) = events.next(&mut window) {
         match e{
             piston::Event::Loop(piston::Loop::Idle(ref idle)) => {
+                    print!("I");
                     for cpu in 0..cpus {
                         match control[cpu].draw_rx.as_mut().unwrap().try_recv(){
                             Ok(buf) =>{
                                 control[cpu].buf.replace(buf);
+                                print!("{}", cpu);
                             }
-                            Err(TryRecvError::Empty) => continue,
+                            Err(TryRecvError::Empty) => {print!("!");}
                             Err(TryRecvError::Disconnected) => {
                                 println!("disconnected in draw");
                                 continue;
@@ -121,8 +123,14 @@ fn main() {
                     
             }
             piston::Event::Loop(piston::Loop::AfterRender(_)) => {
+                for cpu in 0..cpus{
+                    if let Err(_) = control[cpu].control_tx.as_ref().unwrap().try_send(Command::NeedUpdate()){
+                        println!("update request errorr");
+                    }
+                }
             }
             piston::Event::Loop(piston::Loop::Render(_)) => {
+                print!("*");
                 let mut textures: Vec<piston_window::Texture<gfx_device_gl::Resources>> = Vec::new();
                 for cpu in 0..cpus {
                     let texture = control[cpu].buf.as_ref().unwrap().as_texture(& mut window);
@@ -154,14 +162,15 @@ fn main() {
                     }
                     
                 );
-                for cpu in 0..cpus{
-                    control[cpu].control_tx.as_ref().unwrap().try_send(Command::NeedUpdate());
+                for _ in 0..cpus{
                     drop(textures.pop());
                 }
+                drop(textures);
             }
             piston::Event::Loop(piston::Loop::Update(_)) => {
                 // println!("total idle time: {:.2}, pixels: {}, kpps: {:.1}", idle_time, cnt, cnt as f64/idle_time/1000.0);
                 idle_time = 0.0;
+                println!(".");
             }
             piston::Event::Input(piston::Input::Resize(piston::ResizeArgs{window_size:_, draw_size:[new_x, new_y]}), _) => {
                 println!("Resize event: {}x{} (was {}x{})", new_x, new_y, x, y);
@@ -220,12 +229,12 @@ fn calc(mut draw: SyncSender<piston_play::Buffer>, command: Receiver<Command>, m
                     draw = new_draw;
             },
             Ok(Command::NeedUpdate()) => {
-                if let Err(_) = draw.send(buf.clone()){
-                    println!("oops");
+                if let Err(e) = draw.send(buf.clone()){
+                    println!("buf send err: {}", e);
                     continue;
                 }
                 if start.elapsed().as_secs() >= 1 {
-                    println!("thread rate: {:.2} Mpps", cnt as f64 / start.elapsed().as_secs_f64()/1000.0/1000.0);
+                    // println!("thread rate: {:.2} Mpps", cnt as f64 / start.elapsed().as_secs_f64()/1000.0/1000.0);
                     start = std::time::Instant::now();
                     cnt = 0;
                 }
